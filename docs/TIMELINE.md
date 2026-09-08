@@ -5,15 +5,15 @@ Start: Sep 8, 2026 · Deadline: Nov 16, 2026 · Stack: Django + DRF + PostgreSQL
 
 Report checkpoints: **Sep 14 · Sep 28 · Oct 12 · Oct 26 · Nov 9 · Nov 16 (final)**
 
-## Ownership (from the SRS, section 13.2)
+## Ownership
 
 | # | Person | Owns |
 |---|--------|------|
 | 1 | Nursat | Architecture, auth, roles, deployment, integration |
 | 2 | Aizhan | Event/ticket/order/seat-reservation backend services |
 | 3 | Anvar | Organizer + attendee web interfaces |
-| 4 | Abylai | Admin interface, promo campaigns, reporting, org. history, printable tickets |
-| 5 | Mirat | React Native check-in app, support workflow, automated testing, release coordination |
+| 4 | Abylai | React Native check-in app, support workflow, automated testing, release coordination |
+| 5 | Mirat | Admin interface, promo campaigns, reporting, org. history, printable tickets |
 
 Ownership doesn't mean working alone — agree on the API contract before
 building in parallel, and review each other's PRs where you can.

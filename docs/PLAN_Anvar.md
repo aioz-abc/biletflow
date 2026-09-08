@@ -41,7 +41,7 @@ living in `web/`.
 - Wire up promo-code entry/Campaign QR landing at checkout (discount +
   updated total shown before completing purchase).
 - Build the attendee dashboard (their orders/tickets) and organizer
-  dashboard shell (sales overview — Abylai owns the analytics data, you
+  dashboard shell (sales overview — Mirat owns the analytics data, you
   own presenting it here or in the admin app, confirm which with him).
 - Build the attendee-side support chat UI (open a case, message thread)
   against Aizhan's support-case endpoints.
