@@ -46,7 +46,7 @@ PostgreSQL.
   audit trail Abylai needs.
 - Build the server-side validation for Promo Codes and Campaign QR Codes
   (SRS 4.14) — discount calculation, redemption limits, atomic redemption
-  counting — Abylai owns the admin UI for creating campaigns, but the
+  counting — Mirat owns the admin UI for creating campaigns, but the
   enforcement logic lives here.
 - **Report 4 deliverable:** promo code applies correctly at checkout;
   refund/cancel flow works and is logged.
@@ -54,7 +54,7 @@ PostgreSQL.
 ## Phase 5 (Oct 27–Nov 9) — Support cases backend, integration 📍 Report 5 (Nov 9)
 
 - Implement Support Case + Support Message endpoints (SRS 4.13) — Anvar
-  and Mirat need these for the web and mobile support UI.
+  and Abylai need these for the web and mobile support UI.
 - Join the team integration push: fix bugs found when web/admin/mobile
   are wired against your real endpoints instead of mocks.
 

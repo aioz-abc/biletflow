@@ -7,8 +7,8 @@
 | 1 | Nursat | Backend / Architecture Lead | Core backend + integration | Auth, roles, API structure, database setup, deployment, Docker, CI/CD |
 | 2 | Aizhan | Ticketing Backend Developer | Ticket/order/payment logic | Events, ticket types, inventory, orders, checkout simulation, QR generation, refunds |
 | 3 | Anvar | Web Frontend Developer | Organizer + attendee website | Event creation, event pages, ticket selection, checkout UI, attendee dashboard, organizer dashboard |
-| 4 | Abylai | Admin + Analytics Developer | Admin & business features | Admin panel, promo codes, Campaign QR Codes, analytics, event history, audit logs, PDF tickets |
-| 5 | Mirat | Mobile + QA Developer | Mobile scanner + testing | React Native app, QR scanning, check-in, staff assignments, support chat, automated testing |
+| 4 | Abylai | Mobile + QA Developer | Mobile scanner + testing | React Native app, QR scanning, check-in, staff assignments, support chat, automated testing |
+| 5 | Mirat | Admin + Analytics Developer | Admin & business features | Admin panel, promo codes, Campaign QR Codes, analytics, event history, audit logs, PDF tickets |
 
 ## Repo Structure (proposed)
 
@@ -16,8 +16,8 @@
 biletflow/
 ├── backend/     # API, DB, auth — owned by Nursat & Aizhan
 ├── web/         # Organizer + attendee web app — owned by Anvar
-├── admin/       # Admin portal — owned by Abylai
-├── mobile/      # React Native check-in app — owned by Mirat
+├── admin/       # Admin portal — owned by Mirat
+├── mobile/      # React Native check-in app — owned by Abylai
 └── docs/        # Shared docs (this file, API_CONTRACT.md, SRS)
 ```
 
@@ -40,7 +40,7 @@ everyone is pushing in the same week.
 1. **Nursat** sets up the backend skeleton first: folder structure, DB
    schema for core entities (users, events, tickets, orders), basic auth,
    and a first pass at `docs/API_CONTRACT.md`.
-2. While that's happening, **Anvar**, **Abylai**, and **Mirat** scaffold
+2. While that's happening, **Anvar**, **Mirat**, and **Abylai** scaffold
    their own apps (web / admin / mobile) — this doesn't require a working
    backend yet.
 3. **Aizhan** builds ticket/order logic on top of Nursat's DB + auth

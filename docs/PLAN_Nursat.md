@@ -49,9 +49,9 @@ your piece a little ahead of whoever needs it next.
 ## Phase 4 (Oct 13–26) — Notifications, admin auth, mobile API support 📍 Report 4 (Oct 26)
 
 - Wire up simulated email notifications (registration, order, refund).
-- Support Abylai on Platform Admin permissions (suspend user/event).
+- Support Mirat on Platform Admin permissions (suspend user/event).
 - Make sure `/tickets/:id/verify` and `/tickets/:id/check-in` are fast and
-  reliable — SRS wants check-in to complete in about 2 seconds — Mirat's
+  reliable — SRS wants check-in to complete in about 2 seconds — Abylai's
   mobile app depends on these this phase.
 
 ## Phase 5 (Oct 27–Nov 9) — Integration 📍 Report 5 (Nov 9)
@@ -59,7 +59,7 @@ your piece a little ahead of whoever needs it next.
 - This is your heaviest week: connect backend ↔ web ↔ admin ↔ mobile,
   resolve cross-service bugs, and confirm a fresh `git clone` +
   `docker compose up` gives a working demo end to end.
-- Support Abylai's remaining admin/analytics endpoints.
+- Support Mirat's remaining admin/analytics endpoints.
 
 ## Phase 6 (Nov 10–16) — Stabilize 📍 Final (Nov 16)
 
