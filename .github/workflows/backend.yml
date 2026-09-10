@@ -1,0 +1,44 @@
+name: Backend
+
+on:
+  pull_request:
+    paths:
+      - "backend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/backend.yml"
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "docker-compose.yml"
+      - ".github/workflows/backend.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Compose
+        run: docker compose config --quiet
+      - name: Build and start Django with PostgreSQL
+        run: docker compose up --build -d --wait --wait-timeout 120
+      - name: Check Django and migrations
+        run: |
+          docker compose exec -T web python manage.py check
+          docker compose exec -T web python manage.py makemigrations --check --dry-run
+      - name: Run tests against PostgreSQL
+        run: docker compose exec -T web python manage.py test --noinput
+      - name: Lint and formatting
+        run: |
+          docker compose exec -T web ruff check .
+          docker compose exec -T web ruff format --check .
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+      - name: Stop CI containers
+        if: always()
+        run: docker compose down

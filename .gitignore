@@ -216,3 +216,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# BiletFlow local artifacts
+**/staticfiles/
+.DS_Store
