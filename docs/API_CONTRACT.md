@@ -1,5 +1,9 @@
 # BiletFlow — API Contract v1 (Draft)
 
+> Historical Phase 1 proposal. Implemented MVP routes, payloads and deliberate
+> differences are documented in [BACKEND_MVP_API.md](BACKEND_MVP_API.md).
+> Use that contract for frontend integration; statuses below describe the old draft.
+
 Owner: Nursat (Backend/Architecture Lead). Update this as endpoints are
 built or change — this is the shared source of truth so Web, Admin, and
 Mobile can build against it without waiting on backend implementation.

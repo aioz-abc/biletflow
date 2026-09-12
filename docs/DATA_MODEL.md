@@ -1,5 +1,10 @@
 # BiletFlow — Data Model Draft v1
 
+> Historical Phase 1 model proposal. The current MVP also implements Event,
+> TicketType, Order, OrderItem, Payment and Ticket in `backend/ticketing/models.py`.
+> Venue is a string; check-in operator/time live on Ticket. See
+> [BACKEND_MVP_API.md](BACKEND_MVP_API.md) for current behavior and deferred features.
+
 Owner: Nursat; review with Aizhan before domain migrations. Only User and
 OrganizerProfile are implemented in Phase 1. Every other entity below is a
 design proposal for the teammate/phase that owns the feature.

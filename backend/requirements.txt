@@ -4,3 +4,5 @@ psycopg[binary]==3.3.5
 asgiref==3.12.1
 sqlparse==0.6.0
 typing_extensions==4.16.0
+djangorestframework-simplejwt==5.5.1
+qrcode==8.2

@@ -1,5 +1,9 @@
 # Backend foundation — Phase 1
 
+> Historical foundation document. Backend now includes JWT auth and the ticketing
+> MVP. [BACKEND_MVP_API.md](BACKEND_MVP_API.md) describes the current scope and
+> deployment boundaries, including the MVP's optional email verification.
+
 Scope: Nursat's deliverables for September 14, 2026. This is the backend
 foundation, not the implementation of the team's later ticketing features.
 
