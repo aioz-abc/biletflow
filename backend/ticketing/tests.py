@@ -286,3 +286,155 @@ class TicketingAPITests(TestCase):
         self.assertEqual(result.status_code, 200)
         self.assertEqual(result.json()["total_minor"], 0)
         self.assertEqual(len(result.json()["tickets"]), 1)
+
+    def campaign(self, event, **overrides):
+        payload = {
+            "name": "Launch",
+            "discount_type": "percent",
+            "discount_value": 10,
+            **overrides,
+        }
+        response = self.client.post(f"/api/events/{event}/campaigns", payload, format="json")
+        self.assertEqual(response.status_code, 201, response.content)
+        return response.json()
+
+    def test_percent_promo_discounts_the_order_and_records_the_redemption(self):
+        event, kind = self.inventory()
+        promo = self.campaign(event)["codes"][0]["code"]
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind, 2).json()
+        self.assertEqual(order["subtotal_minor"], 20000)
+        paid = self.client.post(
+            f"/api/orders/{order['id']}/checkout",
+            {"outcome": "success", "promo_code": promo.lower()},
+            format="json",
+        ).json()
+        self.assertEqual(paid["subtotal_minor"], 20000)
+        self.assertEqual(paid["discount_minor"], 2000)
+        self.assertEqual(paid["total_minor"], 18000)
+
+    def test_disabled_expired_and_foreign_codes_fail_the_checkout(self):
+        from ticketing.models import PromotionalCampaign
+
+        event, kind = self.inventory()
+        campaign = self.campaign(event)
+        promo = campaign["codes"][0]["code"]
+        other_event, other_kind = self.inventory()
+        self.client.force_authenticate(self.buyer)
+
+        # A code from a different event is rejected rather than silently ignored.
+        foreign = self.reserve(other_event, other_kind).json()
+        self.assertEqual(
+            self.client.post(
+                f"/api/orders/{foreign['id']}/checkout",
+                {"outcome": "success", "promo_code": promo},
+                format="json",
+            ).status_code,
+            400,
+        )
+        PromotionalCampaign.objects.filter(pk=campaign["id"]).update(
+            ends_at=timezone.now() - timedelta(seconds=1)
+        )
+        order = self.reserve(event, kind).json()
+        self.assertEqual(
+            self.client.post(
+                f"/api/orders/{order['id']}/checkout",
+                {"outcome": "success", "promo_code": promo},
+                format="json",
+            ).status_code,
+            400,
+        )
+        # An unknown code fails too, and the order is still pending afterwards.
+        self.assertEqual(
+            self.client.post(
+                f"/api/orders/{order['id']}/checkout",
+                {"outcome": "success", "promo_code": "NOPE"},
+                format="json",
+            ).status_code,
+            400,
+        )
+        self.assertEqual(self.client.get(f"/api/orders/{order['id']}").json()["status"], "pending")
+
+    def test_refund_invalidates_tickets_is_idempotent_and_is_audited(self):
+        event, kind = self.inventory()
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind, 2).json()
+        self.client.post(f"/api/orders/{order['id']}/checkout", {"outcome": "success"})
+        # Attendees cannot refund their own order; SRS 4.9 gives this to organizers.
+        self.assertEqual(self.client.post(f"/api/orders/{order['id']}/refund").status_code, 404)
+        self.client.force_authenticate(self.owner)
+        first = self.client.post(f"/api/orders/{order['id']}/refund")
+        self.assertEqual(first.status_code, 200, first.content)
+        self.assertEqual(first.json()["refund"]["amount_minor"], 20000)
+        self.assertEqual(first.json()["order"]["status"], "refunded")
+        tickets = self.client.get(f"/api/events/{event}/attendees").json()["results"]
+        self.assertTrue(all(ticket["status"] == "refunded" for ticket in tickets))
+        # Repeating the call returns the same refund instead of creating a second one.
+        second = self.client.post(f"/api/orders/{order['id']}/refund")
+        self.assertEqual(second.status_code, 200)
+        self.assertEqual(second.json()["refund"]["id"], first.json()["refund"]["id"])
+        actions = [
+            entry["action"]
+            for entry in self.client.get(f"/api/events/{event}/audit-log").json()["results"]
+        ]
+        self.assertIn("order.refunded", actions)
+
+    def test_refund_is_blocked_once_a_ticket_has_been_checked_in(self):
+        event, kind = self.inventory()
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        ticket = self.client.post(
+            f"/api/orders/{order['id']}/checkout", {"outcome": "success"}
+        ).json()["tickets"][0]
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(
+            self.client.post(
+                f"/api/tickets/{ticket['id']}/check-in", {"qr_token": ticket["qr_token"]}
+            ).status_code,
+            200,
+        )
+        self.assertEqual(self.client.post(f"/api/orders/{order['id']}/refund").status_code, 409)
+
+    def test_free_confirmed_order_can_be_cancelled_but_a_paid_one_cannot(self):
+        event, kind = self.inventory(price=0)
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        self.client.post(f"/api/orders/{order['id']}/checkout", {"outcome": "success"})
+        self.assertEqual(self.client.post(f"/api/orders/{order['id']}/cancel").status_code, 200)
+        self.assertEqual(
+            self.client.get(f"/api/orders/{order['id']}").json()["tickets"][0]["status"],
+            "cancelled",
+        )
+
+    def test_campaign_qr_link_resolves_but_is_never_admission(self):
+        event, kind = self.inventory()
+        created = self.campaign(event)
+        token = created["campaign_link"].rsplit("/", 1)[1]
+        self.client.force_authenticate(None)
+        resolved = self.client.get(f"/api/campaign-links/{token}")
+        self.assertEqual(resolved.status_code, 200, resolved.content)
+        self.assertEqual(resolved.json()["event"], event)
+        self.assertEqual(resolved.json()["promo_code"], created["codes"][0]["code"])
+        # SRS 4.14: a Campaign QR must never be accepted as permission to enter.
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(
+            self.client.post("/api/tickets/check-in", {"qr_token": token}).status_code, 400
+        )
+        self.assertEqual(
+            self.client.post("/api/tickets/verify", {"qr_token": token}).status_code, 400
+        )
+
+    def test_campaign_rejects_ticket_types_from_another_event(self):
+        event, _kind = self.inventory()
+        _other, other_kind = self.inventory()
+        response = self.client.post(
+            f"/api/events/{event}/campaigns",
+            {
+                "name": "Bad",
+                "discount_type": "fixed",
+                "discount_value": 500,
+                "ticket_types": [other_kind],
+            },
+            format="json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)

@@ -1,3 +1,4 @@
+import secrets
 from io import BytesIO
 
 import qrcode
@@ -8,20 +9,23 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from qrcode.image.svg import SvgPathImage
 from rest_framework import generics, permissions
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import NotFound, PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import OrganizerProfile
 
 from . import services
-from .models import Event, Order, Ticket, TicketType
+from .models import AuditLog, Event, Order, PromoCode, PromotionalCampaign, Ticket, TicketType
 from .serializers import (
+    AuditLogSerializer,
+    CampaignSerializer,
     CheckoutSerializer,
     EventSerializer,
     OrderSerializer,
     PublishSerializer,
     QRSerializer,
+    RefundSerializer,
     ReserveSerializer,
     TicketSerializer,
     TicketTypeSerializer,
@@ -219,21 +223,27 @@ class Checkout(APIView):
     def post(self, request, pk):
         serializer = CheckoutSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        order = services.checkout(request.user, pk, serializer.validated_data["outcome"])
+        order = services.checkout(
+            request.user,
+            pk,
+            serializer.validated_data["outcome"],
+            serializer.validated_data.get("promo_code"),
+        )
         return Response(OrderSerializer(order).data)
 
 
 class CancelOrder(APIView):
-    @transaction.atomic
     def post(self, request, pk):
-        initial = get_object_or_404(Order, pk=pk, purchaser=request.user)
-        Event.objects.select_for_update().get(pk=initial.event_id)
-        order = Order.objects.select_for_update().get(pk=pk)
-        if order.status == "confirmed":
-            raise services.Conflict("Confirmed orders cannot be cancelled in this MVP.")
-        order.status = "cancelled"
-        order.save(update_fields=["status"])
+        order = services.cancel_order(request.user, pk)
         return Response(OrderSerializer(order).data)
+
+
+class RefundOrder(APIView):
+    def post(self, request, pk):
+        order, refund = services.refund_order(request.user, pk)
+        return Response(
+            {"order": OrderSerializer(order).data, "refund": RefundSerializer(refund).data}
+        )
 
 
 def accessible_tickets(user):
@@ -311,3 +321,101 @@ class CheckIn(APIView):
             ).pk
         ticket = services.check_in(pk, request.user, serializer.validated_data["qr_token"])
         return Response(TicketSerializer(ticket).data)
+
+
+class CampaignList(generics.ListCreateAPIView):
+    """Organizer-facing campaign CRUD (SRS 4.14).
+
+    Mirat owns the admin UI for campaigns; this is the enforcement-side API it can
+    drive, and he may well want to reshape the payload once that UI exists.
+    """
+
+    serializer_class = CampaignSerializer
+
+    def event(self):
+        return get_object_or_404(managed_events(self.request.user), pk=self.kwargs["pk"])
+
+    def get_serializer_context(self):
+        return {**super().get_serializer_context(), "event": self.event()}
+
+    def get_queryset(self):
+        return (
+            self.event()
+            .campaigns.prefetch_related("codes", "ticket_types", "redemptions__order")
+            .all()
+        )
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        event = get_object_or_404(
+            managed_events(self.request.user).select_for_update(), pk=self.kwargs["pk"]
+        )
+        campaign = serializer.save(event=event)
+        # Every campaign gets exactly one generated code plus its Campaign QR token.
+        token = services.campaign_link_token()
+        PromoCode.objects.create(
+            campaign=campaign,
+            code=services.normalize_code(
+                f"{campaign.name[:6].strip() or 'PROMO'}-{secrets.token_hex(3)}"
+            ),
+            link_token_digest=services.link_token_digest(token),
+        )
+        services.record_audit(event, self.request.user, "campaign.created", campaign, campaign.name)
+        self.link_token = token
+
+    def create(self, request, *args, **kwargs):
+        response = super().create(request, *args, **kwargs)
+        # The raw link token is returned once, at creation, and never stored in clear.
+        response.data["campaign_link"] = services.campaign_link(request, self.link_token)
+        return response
+
+
+class CampaignQR(APIView):
+    def get(self, request, pk):
+        campaign = get_object_or_404(
+            PromotionalCampaign, pk=pk, event__in=managed_events(request.user)
+        )
+        token = services.campaign_link_token()
+        code = campaign.codes.first()
+        code.link_token_digest = services.link_token_digest(token)
+        code.save(update_fields=["link_token_digest"])
+        output = BytesIO()
+        qrcode.make(services.campaign_link(request, token), image_factory=SvgPathImage).save(output)
+        response = HttpResponse(output.getvalue(), content_type="image/svg+xml")
+        # Deliberately distinct from an admission QR: this encodes an HTTPS campaign
+        # link with an opaque token, never a ticket identifier or a discount amount.
+        response["X-BiletFlow-QR-Kind"] = "campaign-link"
+        response["Cache-Control"] = "private, no-store"
+        return response
+
+
+class CampaignLinkResolve(APIView):
+    permission_classes = [permissions.AllowAny]
+
+    def get(self, request, token):
+        code = get_object_or_404(
+            PromoCode.objects.select_related("campaign__event"),
+            link_token_digest=services.link_token_digest(token),
+        )
+        campaign = code.campaign
+        if not campaign.event.published or campaign.event.visibility == "private":
+            raise NotFound()
+        return Response(
+            {
+                "event": campaign.event_id,
+                "campaign": campaign.pk,
+                "promo_code": code.code,
+                "name": campaign.name,
+                "discount_type": campaign.discount_type,
+                "discount_value": campaign.discount_value,
+                "active": services.campaign_active(campaign),
+            }
+        )
+
+
+class EventAuditLog(generics.ListAPIView):
+    serializer_class = AuditLogSerializer
+
+    def get_queryset(self):
+        event = get_object_or_404(managed_events(self.request.user), pk=self.kwargs["pk"])
+        return AuditLog.objects.filter(event=event)
