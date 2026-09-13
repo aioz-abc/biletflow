@@ -1,13 +1,15 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { apiGet } from "./api/client";
 
 function App() {
+  const [events, setEvents] = useState(null)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-  fetch('/api/health')
-    .then(res => res.json())
-    .then(data => console.log("Backend says:", data))
-    .catch(err => console.error("Connection failed:", err));
-  }, []);
+    apiGet('/events?page=1')
+      .then(data => setEvents(data.results))
+      .catch(err => setError(err.message))
+  }, [])
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -54,20 +56,15 @@ function App() {
           <h3 className="text-2xl font-semibold">Upcoming events</h3>
 
           <div className="mt-6 grid gap-6 md:grid-cols-3">
-            <div className="rounded-xl border bg-white p-6">
-              <h4 className="text-xl font-semibold">Event name</h4>
-              <p className="mt-2 text-gray-600">Astana · September 20</p>
-            </div>
-
-            <div className="rounded-xl border bg-white p-6">
-              <h4 className="text-xl font-semibold">Event name</h4>
-              <p className="mt-2 text-gray-600">Almaty · September 25</p>
-            </div>
-
-            <div className="rounded-xl border bg-white p-6">
-              <h4 className="text-xl font-semibold">Event name</h4>
-              <p className="mt-2 text-gray-600">Astana · October 2</p>
-            </div>
+            {error && <p role="alert">Не удалось загрузить события: {error}</p>}
+            {events === null && !error && <p>Загрузка...</p>}
+            {events?.length === 0 && <p>Событий пока нет.</p>}
+            {events?.map(event => (
+              <div className="rounded-xl border bg-white p-6" key={event.id}>
+                <h4 className="text-xl font-semibold">{event.title}</h4>
+                <p className="mt-2 text-gray-600">{event.venue}</p>
+              </div>
+            ))}
           </div>
         </section>
       </main>
