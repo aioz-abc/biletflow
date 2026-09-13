@@ -35,7 +35,10 @@ def managed_events(user):
 
 
 def visible_events(user):
-    public = Q(published=True, organizer__user__is_active=True)
+    # Private events are only ever visible to their owner/admin, even by direct
+    # link; unlisted events are reachable by ID/QR but excluded from the public
+    # listing (see EventList.get_queryset).
+    public = Q(published=True, organizer__user__is_active=True, visibility__in=["public", "unlisted"])
     if user.is_authenticated:
         if user.is_superuser:
             return Event.objects.all()
@@ -48,9 +51,9 @@ class EventList(generics.ListCreateAPIView):
     permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     def get_queryset(self):
-        return Event.objects.filter(published=True, organizer__user__is_active=True).select_related(
-            "organizer"
-        )
+        return Event.objects.filter(
+            published=True, organizer__user__is_active=True, visibility="public"
+        ).select_related("organizer")
 
     def perform_create(self, serializer):
         profile = OrganizerProfile.objects.filter(user=self.request.user).first()
@@ -109,6 +112,41 @@ class Publish(APIView):
         event.published = serializer.validated_data["published"]
         event.save(update_fields=["published"])
         return Response(EventSerializer(event).data)
+
+
+class DuplicateEvent(APIView):
+    @transaction.atomic
+    def post(self, request, pk):
+        original = get_object_or_404(managed_events(request.user).select_for_update(), pk=pk)
+        copy = Event.objects.create(
+            organizer=original.organizer,
+            title=f"Copy of {original.title}",
+            description=original.description,
+            venue=original.venue,
+            category=original.category,
+            images=original.images,
+            visibility=original.visibility,
+            starts_at=original.starts_at,
+            ends_at=original.ends_at,
+            capacity=original.capacity,
+            published=False,
+        )
+        # Duplication copies configuration only: ticket-type setup is carried
+        # over as fresh rows with no inventory sold or reserved against them.
+        TicketType.objects.bulk_create(
+            TicketType(
+                event=copy,
+                name=kind.name,
+                price_minor=kind.price_minor,
+                quantity=kind.quantity,
+                max_per_order=kind.max_per_order,
+                sales_start=kind.sales_start,
+                sales_end=kind.sales_end,
+                hidden=kind.hidden,
+            )
+            for kind in original.ticket_types.all()
+        )
+        return Response(EventSerializer(copy).data, status=201)
 
 
 class TicketTypeList(generics.ListCreateAPIView):
