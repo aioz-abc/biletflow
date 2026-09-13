@@ -1,0 +1,41 @@
+.mw { min-height: 100vh; background: #f4f5f1; color: #202820; font: 15px/1.55 system-ui, sans-serif; display: grid; grid-template-columns: 245px 1fr; }
+.mw aside { background: #183b30; color: #e7efe7; padding: 32px 22px; }
+.mw-brand { display: block; font-size: 28px; font-weight: 750; margin-bottom: 45px; }
+.mw-brand span { display: block; font-size: 10px; letter-spacing: .16em; margin-top: 8px; font-weight: 400; }
+.mw nav { display: grid; gap: 8px; }
+.mw nav a { padding: 12px; border-radius: 7px; }
+.mw nav a:hover, .mw nav a[aria-current] { background: #315546; }
+.mw aside > p { margin-top: 50px; font-size: 12px; color: #c7d9cc; }
+.mw main { width: 100%; max-width: 1250px; padding: 40px; min-width: 0; }
+.mw header { margin-bottom: 28px; }
+.mw h1 { font-size: clamp(25px, 4vw, 36px); font-weight: 650; margin: 8px 0 16px; letter-spacing: -.03em; }
+.mw h2 { font-size: 20px; font-weight: 650; margin-bottom: 16px; }
+.mw p { margin: 10px 0; }
+.mw-eyebrow { font-size: 11px; letter-spacing: .13em; font-weight: 700; }
+.mw-notice { background: #fff0ce; padding: 10px 16px; border-radius: 6px; color: #624c19; }
+.mw-panel { border: 1px solid #dce1d8; background: white; padding: 25px; border-radius: 12px; margin-bottom: 20px; min-width: 0; }
+.mw-panel p, .mw small { color: #546052; }
+.mw-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+.mw-stats strong { font-size: 27px; font-weight: 650; display: block; }
+.mw-stats small { font-size: 11px; }
+.mw-columns { display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px; align-items: start; }
+.mw-controls { display: flex; flex-wrap: wrap; gap: 16px; }
+.mw-controls label { flex: 1; min-width: 160px; }
+.mw label { display: grid; gap: 6px; margin-bottom: 18px; font-size: 13px; font-weight: 600; }
+.mw input, .mw select { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid #bac5b9; border-radius: 6px; background: white; color: #202820; font: inherit; }
+.mw button, .mw-button { display: inline-block; background: #214e3e; color: white; border-radius: 6px; padding: 11px 18px; font-weight: 600; cursor: pointer; }
+.mw :disabled { background: #edf0eb; color: #65705f; cursor: not-allowed; }
+.mw :focus-visible { outline: 3px solid #b7811d; outline-offset: 3px; }
+.mw-login { max-width: 490px; margin: 35px auto; }
+.mw-login .mw-button, .mw-login button { display: block; width: 100%; margin-bottom: 18px; text-align: center; }
+.mw-table { overflow-x: auto; }
+.mw table { width: 100%; text-align: left; border-collapse: collapse; }
+.mw th { font-size: 12px; color: #5c6758; background: #f5f7f2; }
+.mw td, .mw th { padding: 14px 12px; border-bottom: 1px solid #e5e9e0; }
+.mw-bar { display: grid; grid-template-columns: 55px 1fr 25px; gap: 10px; align-items: center; margin: 15px 0; }
+.mw meter { width: 100%; height: 20px; accent-color: #397352; }
+.mw-discount { font-size: 48px; display: block; margin: 24px 0; }
+.mw-timeline { padding-left: 20px; border-left: 2px solid #d9e3d4; }
+.mw-timeline li { margin: 22px 0; }
+@media (max-width: 900px) { .mw { grid-template-columns: 1fr; } .mw aside { padding: 18px; } .mw-brand { margin-bottom: 16px; } .mw nav { display: flex; flex-wrap: wrap; gap: 4px; } .mw aside > p { display: none; } .mw main { padding: 22px 16px; } .mw-columns { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .mw-stats { grid-template-columns: 1fr; gap: 0; } .mw-panel { padding: 18px; } }
