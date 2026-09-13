@@ -24,6 +24,9 @@ class StrictModelSerializer(serializers.ModelSerializer):
 
 class EventSerializer(StrictModelSerializer):
     capacity = serializers.IntegerField(min_value=1, max_value=1000000)
+    images = serializers.ListField(
+        child=serializers.CharField(max_length=500), required=False, max_length=10
+    )
 
     class Meta:
         model = Event
@@ -33,9 +36,12 @@ class EventSerializer(StrictModelSerializer):
             "title",
             "description",
             "venue",
+            "category",
+            "images",
             "starts_at",
             "ends_at",
             "capacity",
+            "visibility",
             "published",
         ]
         read_only_fields = ["id", "organizer", "published"]

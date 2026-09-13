@@ -234,6 +234,43 @@ class TicketingAPITests(TestCase):
         self.assertEqual(self.client.get("/api/events").json()["count"], 0)
         self.assertEqual(self.client.post("/api/events", {}).status_code, 401)
 
+    def test_unlisted_and_private_events_are_hidden_from_the_public_list(self):
+        event, _kind = self.inventory()
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(
+            self.client.patch(f"/api/events/{event}", {"visibility": "unlisted"}).status_code, 200
+        )
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get("/api/events").json()["count"], 0)
+        self.assertEqual(self.client.get(f"/api/events/{event}").status_code, 200)
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(
+            self.client.patch(f"/api/events/{event}", {"visibility": "private"}).status_code, 200
+        )
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(f"/api/events/{event}").status_code, 404)
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(self.client.get(f"/api/events/{event}").status_code, 200)
+
+    def test_duplicate_copies_configuration_as_a_new_unpublished_draft(self):
+        event, kind = self.inventory()
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(f"/api/events/{event}/duplicate")
+        self.assertEqual(response.status_code, 201, response.content)
+        copy = response.json()
+        self.assertNotEqual(copy["id"], event)
+        self.assertFalse(copy["published"])
+        self.assertEqual(copy["title"], "Copy of Concert")
+        types = self.client.get(f"/api/events/{copy['id']}/ticket-types").json()["results"]
+        self.assertEqual(len(types), 1)
+        self.assertNotEqual(types[0]["id"], kind)
+        self.assertEqual(types[0]["name"], "Standard")
+        # Duplicating someone else's event is not allowed.
+        self.client.force_authenticate(self.buyer)
+        self.assertEqual(
+            self.client.post(f"/api/events/{event}/duplicate").status_code, 404
+        )
+
     def test_free_checkout_and_client_price_rejection(self):
         event, kind = self.inventory(price=0)
         self.client.force_authenticate(self.buyer)
