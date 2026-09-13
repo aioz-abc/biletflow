@@ -1,0 +1,26 @@
+name: CI Pipeline
+on: [pull_request]
+
+jobs:
+  test-mobile:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install and Test Mobile
+        run: |
+          cd mobile
+          npm install
+          npx jest
+
+  test-backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      - name: Install and Test Backend
+        run: |
+          cd backend
+          pip install pytest pytest-django
+          pytest
