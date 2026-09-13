@@ -6,7 +6,17 @@ from rest_framework import serializers
 
 from accounts.serializers import StrictSerializer
 
-from .models import Event, Order, OrderItem, Ticket, TicketType
+from .models import (
+    AuditLog,
+    Event,
+    Order,
+    OrderItem,
+    PromoCode,
+    PromotionalCampaign,
+    Refund,
+    Ticket,
+    TicketType,
+)
 
 
 class StrictModelSerializer(serializers.ModelSerializer):
@@ -42,6 +52,7 @@ class EventSerializer(StrictModelSerializer):
             "ends_at",
             "capacity",
             "visibility",
+            "refund_policy",
             "published",
         ]
         read_only_fields = ["id", "organizer", "published"]
@@ -140,6 +151,8 @@ class OrderSerializer(serializers.ModelSerializer):
             "id",
             "event",
             "status",
+            "subtotal_minor",
+            "discount_minor",
             "total_minor",
             "currency",
             "expires_at",
@@ -182,6 +195,7 @@ class ReserveSerializer(StrictSerializer):
 
 class CheckoutSerializer(StrictSerializer):
     outcome = serializers.ChoiceField(choices=["success", "failure"])
+    promo_code = serializers.CharField(max_length=32, required=False, allow_blank=False)
 
 
 class PublishSerializer(StrictSerializer):
@@ -190,3 +204,91 @@ class PublishSerializer(StrictSerializer):
 
 class QRSerializer(StrictSerializer):
     qr_token = serializers.CharField(max_length=256)
+
+
+class RefundSerializer(serializers.ModelSerializer):
+    order = serializers.IntegerField(source="payment.order_id", read_only=True)
+
+    class Meta:
+        model = Refund
+        fields = ["id", "order", "amount_minor", "initiated_by", "created_at"]
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuditLog
+        fields = [
+            "id",
+            "event",
+            "actor",
+            "action",
+            "entity_type",
+            "entity_id",
+            "description",
+            "created_at",
+        ]
+
+
+class PromoCodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromoCode
+        fields = ["id", "code"]
+
+
+class CampaignSerializer(StrictModelSerializer):
+    discount_value = serializers.IntegerField(min_value=1, max_value=1000000000)
+    codes = PromoCodeSerializer(many=True, read_only=True)
+    report = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PromotionalCampaign
+        fields = [
+            "id",
+            "event",
+            "name",
+            "discount_type",
+            "discount_value",
+            "ticket_types",
+            "starts_at",
+            "ends_at",
+            "max_redemptions",
+            "enabled",
+            "created_at",
+            "codes",
+            "report",
+        ]
+        read_only_fields = ["id", "event", "created_at", "codes", "report"]
+
+    def validate(self, attrs):
+        start = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
+        end = attrs.get("ends_at", getattr(self.instance, "ends_at", None))
+        if start and end and end <= start:
+            raise serializers.ValidationError({"ends_at": "Must be after starts_at."})
+        if attrs.get("discount_type") == "percent" and attrs["discount_value"] > 100:
+            raise serializers.ValidationError({"discount_value": "Percent cannot exceed 100."})
+        event = self.context.get("event")
+        kinds = attrs.get("ticket_types") or []
+        if event and any(kind.event_id != event.pk for kind in kinds):
+            raise serializers.ValidationError(
+                {"ticket_types": "Ticket types must belong to this event."}
+            )
+        return attrs
+
+    def get_report(self, obj):
+        # SRS 4.14 campaign reporting: redemptions, orders, tickets sold, gross, discount, net.
+        redemptions = list(obj.redemptions.select_related("order"))
+        orders = [r.order for r in redemptions]
+        gross = sum(order.subtotal_minor for order in orders)
+        discount = sum(r.discount_minor for r in redemptions)
+        return {
+            "redemptions": len(redemptions),
+            "orders": len({order.pk for order in orders}),
+            "tickets_sold": Ticket.objects.filter(order_item__order__in=orders).count(),
+            "gross_minor": gross,
+            "discount_minor": discount,
+            "net_minor": gross - discount,
+        }
+
+
+class CampaignLinkSerializer(StrictSerializer):
+    token = serializers.CharField(max_length=128)
