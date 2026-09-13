@@ -1,7 +1,7 @@
 # Anvar — Web Frontend Developer
 
 Owns: the organizer + attendee web application (React + Tailwind CSS),
-living in `web/`.
+living in `frontend/`.
 
 ## Phase 1 (Sep 8–14) — Setup & Planning 📍 Report 1 (Sep 14)
 
@@ -42,7 +42,8 @@ living in `web/`.
   updated total shown before completing purchase).
 - Build the attendee dashboard (their orders/tickets) and organizer
   dashboard shell (sales overview — Mirat owns the analytics data, you
-  own presenting it here or in the admin app, confirm which with him).
+  own the organizer shell, and Mirat owns the analytics views inside the
+  shared `frontend/` app; coordinate routes and shared components with him).
 - Build the attendee-side support chat UI (open a case, message thread)
   against Aizhan's support-case endpoints.
 - **Report 4 deliverable:** promo code works at checkout; attendee can

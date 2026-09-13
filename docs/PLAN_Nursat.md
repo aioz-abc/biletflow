@@ -56,10 +56,10 @@ your piece a little ahead of whoever needs it next.
 
 ## Phase 5 (Oct 27–Nov 9) — Integration 📍 Report 5 (Nov 9)
 
-- This is your heaviest week: connect backend ↔ web ↔ admin ↔ mobile,
+- This is your heaviest week: connect backend ↔ frontend ↔ mobile,
   resolve cross-service bugs, and confirm a fresh `git clone` +
   `docker compose up` gives a working demo end to end.
-- Support Mirat's remaining admin/analytics endpoints.
+- Support Mirat's remaining admin/analytics endpoints used by `frontend/`.
 
 ## Phase 6 (Nov 10–16) — Stabilize 📍 Final (Nov 16)
 

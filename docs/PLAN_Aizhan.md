@@ -55,7 +55,7 @@ PostgreSQL.
 
 - Implement Support Case + Support Message endpoints (SRS 4.13) — Anvar
   and Abylai need these for the web and mobile support UI.
-- Join the team integration push: fix bugs found when web/admin/mobile
+- Join the team integration push: fix bugs found when frontend/mobile
   are wired against your real endpoints instead of mocks.
 
 ## Phase 6 (Nov 10–16) — Stabilize 📍 Final (Nov 16)

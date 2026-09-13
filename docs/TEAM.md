@@ -15,14 +15,14 @@
 ```
 biletflow/
 ├── backend/     # API, DB, auth — owned by Nursat & Aizhan
-├── web/         # Organizer + attendee web app — owned by Anvar
-├── admin/       # Admin portal — owned by Mirat
+├── frontend/    # Attendee, organizer, and admin UI — Anvar & Mirat
 ├── mobile/      # React Native check-in app — owned by Abylai
 └── docs/        # Shared docs (this file, API_CONTRACT.md, SRS)
 ```
 
-Working in separate top-level folders keeps merge conflicts rare even when
-everyone is pushing in the same week.
+Anvar and Mirat share `frontend/`, with separate route/component ownership:
+Anvar owns attendee and organizer flows; Mirat owns admin, campaigns,
+analytics, and event-history views. Coordinate changes to shared components.
 
 ## Branch Workflow
 
@@ -40,9 +40,9 @@ everyone is pushing in the same week.
 1. **Nursat** sets up the backend skeleton first: folder structure, DB
    schema for core entities (users, events, tickets, orders), basic auth,
    and a first pass at `docs/API_CONTRACT.md`.
-2. While that's happening, **Anvar**, **Mirat**, and **Abylai** scaffold
-   their own apps (web / admin / mobile) — this doesn't require a working
-   backend yet.
+2. While that's happening, **Anvar** and **Mirat** scaffold their assigned
+   routes in `frontend/`, while **Abylai** scaffolds `mobile/` — this doesn't
+   require a working backend yet.
 3. **Aizhan** builds ticket/order logic on top of Nursat's DB + auth
    foundation as soon as it lands.
 4. Once the API contract stabilizes, everyone builds their screens against

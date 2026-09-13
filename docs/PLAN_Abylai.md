@@ -10,7 +10,7 @@ coordination (CI/CD, keeping `main` healthy). Living in `mobile/`.
   per the SRS's suggested stack, unless the team has a reason to go bare
   React Native).
 - Set up the automated-testing skeleton: pytest for the Django backend,
-  Jest/React Testing Library for web/admin, Jest for the mobile app.
+  Jest/React Testing Library for `frontend/`, Jest for the mobile app.
 - Pair with Nursat on the GitHub Actions CI pipeline (lint + test on every
   PR) — this is your "release coordination" hat.
 - **Report 1 deliverable:** mobile app scaffold running on a simulator/
@@ -59,6 +59,6 @@ coordination (CI/CD, keeping `main` healthy). Living in `mobile/`.
 
 ## Phase 6 (Nov 10–16) — Stabilize & release 📍 Final (Nov 16)
 
-- Final regression pass across all four apps, confirm CI is green, help
-  write/rehearse the demo script (you're well-placed for this given your
-  QA view of the whole system).
+- Final regression pass across backend, frontend, and mobile, confirm CI is
+  green, help write/rehearse the demo script (you're well-placed for this
+  given your QA view of the whole system).
