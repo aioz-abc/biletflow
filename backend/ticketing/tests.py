@@ -267,9 +267,7 @@ class TicketingAPITests(TestCase):
         self.assertEqual(types[0]["name"], "Standard")
         # Duplicating someone else's event is not allowed.
         self.client.force_authenticate(self.buyer)
-        self.assertEqual(
-            self.client.post(f"/api/events/{event}/duplicate").status_code, 404
-        )
+        self.assertEqual(self.client.post(f"/api/events/{event}/duplicate").status_code, 404)
 
     def test_free_checkout_and_client_price_rejection(self):
         event, kind = self.inventory(price=0)

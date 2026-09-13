@@ -38,7 +38,9 @@ def visible_events(user):
     # Private events are only ever visible to their owner/admin, even by direct
     # link; unlisted events are reachable by ID/QR but excluded from the public
     # listing (see EventList.get_queryset).
-    public = Q(published=True, organizer__user__is_active=True, visibility__in=["public", "unlisted"])
+    public = Q(
+        published=True, organizer__user__is_active=True, visibility__in=["public", "unlisted"]
+    )
     if user.is_authenticated:
         if user.is_superuser:
             return Event.objects.all()
