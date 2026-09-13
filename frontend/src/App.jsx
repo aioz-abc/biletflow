@@ -1,4 +1,14 @@
+import { useEffect } from "react";
+
 function App() {
+
+  useEffect(() => {
+  fetch('/api/health')
+    .then(res => res.json())
+    .then(data => console.log("Backend says:", data))
+    .catch(err => console.error("Connection failed:", err));
+  }, []);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b bg-white">
