@@ -18,38 +18,49 @@ PostgreSQL.
 
 ## Phase 2 (Sep 15–28) — Event creation 📍 Report 2 (Sep 28)
 
-- Implement Event CRUD: create, edit, publish/unpublish, duplicate
-  (SRS 4.2). Include category, images, venue, date/time, capacity,
-  public/unlisted/private visibility.
-- Implement OrganizerProfile (contact + payout info placeholder).
+- ✅ Event category, images and public/unlisted/private visibility, plus the
+  duplicate-event endpoint (SRS 4.2) — branch
+  `aizhan/event-visibility-duplicate`, pending review and merge into `dev`.
+- OrganizerProfile (contact + payout info placeholder) was delivered by
+  Nursat as part of the backend foundation.
+- Remaining this phase: support Anvar Khaydarov on the API side of the
+  organizer event-creation UI (due Sep 28).
 - **Report 2 deliverable:** an organizer can create and publish an event
-  through the API (Anvar will be wiring this to a real UI the same phase).
+  through the API (Anvar is wiring this to a real UI the same phase).
 
 ## Phase 3 (Sep 29–Oct 12) — Tickets, inventory, checkout, QR 📍 Report 3 (Oct 12)
 
-- Implement Ticket Type CRUD (free + paid, price, quantity, sale window,
-  per-order limits, hide-without-delete) — SRS 4.3.
-- Implement free registration (zero-value order + QR ticket) — SRS 4.4.
-- Implement order creation with **temporary inventory/seat holds** that
-  expire on abandonment, and the sandboxed/simulated paid checkout —
-  SRS 4.5–4.6. This must prevent double-selling the same seat/ticket even
-  under concurrent checkouts — use a DB-level lock or atomic transaction,
-  and get Nursat to review this specifically.
-- Implement QR-code ticket generation on successful "payment" — SRS 4.7.
-- **Report 3 deliverable:** an attendee can select a ticket, complete a
-  simulated checkout, and receive a QR-code ticket.
+> **Ownership changed.** This phase was delivered early by Nursat as part of
+> the backend ticketing MVP (commit `489e07c`), not by Aizhan as originally
+> planned. Kept here for traceability against the original plan.
+
+- ✅ Ticket Type CRUD (free + paid, price, quantity, sale window, per-order
+  limits, hide-without-delete) — SRS 4.3 — *Nursat*.
+- ✅ Free registration (zero-value order + QR ticket) — SRS 4.4 — *Nursat*.
+- ✅ Order creation with temporary inventory holds that expire on
+  abandonment, and the simulated paid checkout — SRS 4.5–4.6. The event-level
+  lock prevents double-selling under concurrent checkout — *Nursat*.
+- ✅ QR-code ticket generation on successful "payment" — SRS 4.7 — *Nursat*.
+- **Report 3 deliverable:** met early — `backend/demo_mvp.py` runs the whole
+  flow end to end.
 
 ## Phase 4 (Oct 13–26) — Refunds, promo-code backend 📍 Report 4 (Oct 26)
 
-- Implement order cancellation (free) and full refunds (SRS 4.9) —
-  refunded/cancelled tickets become invalid; log all actions for the
-  audit trail Abylai needs.
-- Build the server-side validation for Promo Codes and Campaign QR Codes
-  (SRS 4.14) — discount calculation, redemption limits, atomic redemption
-  counting — Mirat owns the admin UI for creating campaigns, but the
-  enforcement logic lives here.
-- **Report 4 deliverable:** promo code applies correctly at checkout;
-  refund/cancel flow works and is logged.
+> Delivered early, ahead of the Oct 13–26 window. Branch
+> `aizhan/phase4-refunds-promo`, stacked on the Phase 2 branch and pending
+> review and merge into `dev`.
+
+- ✅ Order cancellation for free registrations and full refunds for paid
+  orders (SRS 4.9) — refunded/cancelled tickets become invalid, and every
+  action is written to an append-only audit log.
+- ✅ Server-side validation for Promo Codes and Campaign QR Codes (SRS 4.14)
+  — discount calculation, redemption limits and atomic redemption counting
+  inside the existing event lock. Mirat owns the admin UI; the enforcement
+  logic and a first-pass campaign CRUD live here.
+- Open design decisions still needing Nursat's review are listed in the
+  pull request for that branch.
+- **Report 4 deliverable:** met early — promo code applies at checkout, and
+  the refund/cancel flow works and is logged.
 
 ## Phase 5 (Oct 27–Nov 9) — Support cases backend, integration 📍 Report 5 (Nov 9)
 
