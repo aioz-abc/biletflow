@@ -10,9 +10,16 @@ class Event(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField(blank=True)
     venue = models.CharField(max_length=300)
+    category = models.CharField(max_length=50, blank=True)
+    images = models.JSONField(default=list, blank=True)
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     capacity = models.PositiveIntegerField()
+    visibility = models.CharField(
+        max_length=10,
+        choices=[(v, v) for v in ("public", "unlisted", "private")],
+        default="public",
+    )
     published = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
