@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiGet } from "../api/client";
 
 function Home() {
@@ -27,9 +28,12 @@ function Home() {
             Explore events
           </button>
 
-          <button className="rounded-lg border border-gray-300 bg-white px-6 py-3 font-medium">
+          <Link
+            to="/organizer/events/new"
+            className="rounded-lg border border-gray-300 bg-white px-6 py-3 font-medium"
+          >
             Create an event
-          </button>
+          </Link>
         </div>
       </section>
 
@@ -44,10 +48,14 @@ function Home() {
           {events?.length === 0 && <p>Событий пока нет.</p>}
 
           {events?.map((event) => (
-            <div className="rounded-xl border bg-white p-6" key={event.id}>
+            <Link
+              to={`/events/${event.id}`}
+              className="rounded-xl border bg-white p-6 hover:shadow"
+              key={event.id}
+            >
               <h4 className="text-xl font-semibold">{event.title}</h4>
               <p className="mt-2 text-gray-600">{event.venue}</p>
-            </div>
+            </Link>
           ))}
         </div>
       </section>
