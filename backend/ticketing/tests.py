@@ -235,7 +235,7 @@ class TicketingAPITests(TestCase):
         self.assertEqual(self.client.post("/api/events", {}).status_code, 401)
 
     def test_unlisted_and_private_events_are_hidden_from_the_public_list(self):
-        event, _kind = self.inventory()
+        event, kind = self.inventory()
         self.client.force_authenticate(self.owner)
         self.assertEqual(
             self.client.patch(f"/api/events/{event}", {"visibility": "unlisted"}).status_code, 200
@@ -249,8 +249,33 @@ class TicketingAPITests(TestCase):
         )
         self.client.force_authenticate(None)
         self.assertEqual(self.client.get(f"/api/events/{event}").status_code, 404)
+        self.client.force_authenticate(self.buyer)
+        self.assertEqual(self.reserve(event, kind).status_code, 404)
         self.client.force_authenticate(self.owner)
         self.assertEqual(self.client.get(f"/api/events/{event}").status_code, 200)
+
+    def test_event_images_must_be_urls(self):
+        event = self.event()
+        self.assertEqual(
+            self.client.patch(
+                f"/api/events/{event}", {"images": ["not a URL"]}, format="json"
+            ).status_code,
+            400,
+        )
+
+    def test_private_event_blocks_checkout_of_existing_hold(self):
+        event, kind = self.inventory()
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        self.client.force_authenticate(self.owner)
+        self.client.patch(f"/api/events/{event}", {"visibility": "private"})
+        self.client.force_authenticate(self.buyer)
+        self.assertEqual(
+            self.client.post(
+                f"/api/orders/{order['id']}/checkout", {"outcome": "success"}
+            ).status_code,
+            409,
+        )
 
     def test_duplicate_copies_configuration_as_a_new_unpublished_draft(self):
         event, kind = self.inventory()
@@ -268,6 +293,13 @@ class TicketingAPITests(TestCase):
         # Duplicating someone else's event is not allowed.
         self.client.force_authenticate(self.buyer)
         self.assertEqual(self.client.post(f"/api/events/{event}/duplicate").status_code, 404)
+
+    def test_duplicate_accepts_maximum_length_title(self):
+        event = self.event()
+        self.client.patch(f"/api/events/{event}", {"title": "A" * 200})
+        response = self.client.post(f"/api/events/{event}/duplicate")
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertLessEqual(len(response.json()["title"]), 200)
 
     def test_free_checkout_and_client_price_rejection(self):
         event, kind = self.inventory(price=0)

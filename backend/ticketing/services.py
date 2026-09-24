@@ -48,6 +48,10 @@ def reserve(user, event_id, items):
         published=True,
         organizer__user__is_active=True,
     )
+    if event.visibility == "private" and not (
+        user.is_superuser or event.organizer.user_id == user.pk
+    ):
+        raise NotFound()
     now = timezone.now()
     if event.starts_at <= now:
         raise Conflict("Sales have ended.")
@@ -99,6 +103,10 @@ def checkout(user, order_id, outcome, promo_code=None):
         not event.published
         or not event.organizer.user.is_active
         or event.starts_at <= timezone.now()
+        or (
+            event.visibility == "private"
+            and not (user.is_superuser or event.organizer.user_id == user.pk)
+        )
     ):
         raise Conflict("Event is unavailable.")
     if outcome == "failure":
