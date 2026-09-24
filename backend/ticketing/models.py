@@ -34,6 +34,19 @@ class Event(models.Model):
         ]
 
 
+class StaffAssignment(models.Model):
+    event = models.ForeignKey(Event, on_delete=models.PROTECT, related_name="staff_assignments")
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="staff_assignments"
+    )
+    can_check_in = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=["event", "user"], name="one_staff_assignment_per_event")
+        ]
+
+
 class TicketType(models.Model):
     event = models.ForeignKey(Event, on_delete=models.PROTECT, related_name="ticket_types")
     name = models.CharField(max_length=120)

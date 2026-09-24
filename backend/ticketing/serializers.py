@@ -14,6 +14,7 @@ from .models import (
     PromoCode,
     PromotionalCampaign,
     Refund,
+    StaffAssignment,
     Ticket,
     TicketType,
 )
@@ -304,3 +305,14 @@ class CampaignSerializer(StrictModelSerializer):
 
 class CampaignLinkSerializer(StrictSerializer):
     token = serializers.CharField(max_length=128)
+
+
+class StaffAssignmentSerializer(StrictModelSerializer):
+    email = serializers.EmailField(write_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    can_check_in = serializers.BooleanField(default=True)
+
+    class Meta:
+        model = StaffAssignment
+        fields = ["id", "event", "user", "email", "user_email", "can_check_in"]
+        read_only_fields = ["id", "event", "user", "user_email"]

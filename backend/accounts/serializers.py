@@ -7,7 +7,9 @@ from django.db import IntegrityError, transaction
 from rest_framework import serializers
 from rest_framework.exceptions import AuthenticationFailed
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.utils import get_md5_hash_password
 
 from .models import OrganizerProfile, User
 
@@ -27,6 +29,8 @@ def user_payload(user):
     roles = ["attendee"]
     if profile:
         roles.append("organizer")
+    if user.staff_assignments.exists():
+        roles.append("event_admin")
     if user.is_superuser:
         roles.append("platform_admin")
     return {
@@ -120,8 +124,25 @@ class ActiveRefreshSerializer(TokenRefreshSerializer):
         user = User.objects.select_for_update().filter(pk=token["user_id"]).first()
         if user is None or not user.is_active:
             raise AuthenticationFailed("Account unavailable.")
+        if api_settings.CHECK_REVOKE_TOKEN and token.get(
+            api_settings.REVOKE_TOKEN_CLAIM
+        ) != get_md5_hash_password(user.password):
+            raise AuthenticationFailed("Account credentials changed.")
         return super().validate(attrs)
 
 
 class LogoutSerializer(StrictSerializer):
     refresh = serializers.CharField()
+
+
+class UIDTokenSerializer(StrictSerializer):
+    uid = serializers.CharField()
+    token = serializers.CharField()
+
+
+class ResetRequestSerializer(StrictSerializer):
+    email = serializers.EmailField()
+
+
+class ResetConfirmSerializer(UIDTokenSerializer):
+    new_password = serializers.CharField(trim_whitespace=False)

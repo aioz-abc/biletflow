@@ -23,6 +23,7 @@ from .models import (
     Ticket,
     TicketType,
 )
+from .permissions import can_check_in
 
 
 class Conflict(APIException):
@@ -187,9 +188,7 @@ def check_qr(ticket, token):
 def check_in(ticket_id, user, token):
     initial = get_object_or_404(Ticket, pk=ticket_id)
     event = Event.objects.select_for_update().get(pk=initial.order_item.order.event_id)
-    if not user.is_superuser and event.organizer.user_id != user.pk:
-        from rest_framework.exceptions import NotFound
-
+    if not can_check_in(user, event):
         raise NotFound()
     ticket = Ticket.objects.select_for_update().get(pk=ticket_id)
     check_qr(ticket, token)
