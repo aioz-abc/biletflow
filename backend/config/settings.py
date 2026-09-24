@@ -13,6 +13,9 @@ if not DEBUG and SECRET_KEY.startswith("django-insecure-"):
     raise ImproperlyConfigured("Set a private DJANGO_SECRET_KEY when DEBUG is disabled.")
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:5173").rstrip("/")
+if not DEBUG and not FRONTEND_BASE_URL.startswith("https://"):
+    raise ImproperlyConfigured("Set an HTTPS FRONTEND_BASE_URL when DEBUG is disabled.")
 INSTALLED_APPS = [
     "django.contrib.admin",
     "django.contrib.auth",
