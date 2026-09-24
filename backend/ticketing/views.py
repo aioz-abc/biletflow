@@ -15,10 +15,20 @@ from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import OrganizerProfile
+from accounts.models import OrganizerProfile, User
 
 from . import services
-from .models import AuditLog, Event, Order, PromoCode, PromotionalCampaign, Ticket, TicketType
+from .models import (
+    AuditLog,
+    Event,
+    Order,
+    PromoCode,
+    PromotionalCampaign,
+    StaffAssignment,
+    Ticket,
+    TicketType,
+)
+from .permissions import CanCheckInEvent, scan_events
 from .serializers import (
     AuditLogSerializer,
     CampaignSerializer,
@@ -30,6 +40,7 @@ from .serializers import (
     QRSerializer,
     RefundSerializer,
     ReserveSerializer,
+    StaffAssignmentSerializer,
     TicketSerializer,
     TicketTypeSerializer,
     qr_token,
@@ -106,9 +117,14 @@ class EventDetail(generics.RetrieveUpdateDestroyAPIView):
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
         event = get_object_or_404(self.get_queryset().select_for_update(), pk=kwargs["pk"])
-        if event.orders.exists() or event.campaigns.exists() or event.audit_entries.exists():
+        if (
+            event.orders.exists()
+            or event.campaigns.exists()
+            or event.audit_entries.exists()
+            or event.staff_assignments.exists()
+        ):
             raise services.Conflict(
-                "Events with orders or campaigns cannot be deleted; unpublish instead."
+                "Event has orders, campaigns, staff or history; unpublish instead."
             )
         event.ticket_types.all().delete()
         event.delete()
@@ -297,8 +313,40 @@ class EventAttendees(generics.ListAPIView):
     serializer_class = TicketSerializer
 
     def get_queryset(self):
-        event = get_object_or_404(managed_events(self.request.user), pk=self.kwargs["pk"])
-        return accessible_tickets(self.request.user).filter(order_item__order__event=event)
+        event = get_object_or_404(scan_events(self.request.user), pk=self.kwargs["pk"])
+        return Ticket.objects.filter(order_item__order__event=event)
+
+
+class EventStaff(generics.ListCreateAPIView):
+    serializer_class = StaffAssignmentSerializer
+
+    def event(self):
+        return get_object_or_404(managed_events(self.request.user), pk=self.kwargs["pk"])
+
+    def get_queryset(self):
+        return self.event().staff_assignments.select_related("user").order_by("pk")
+
+    @transaction.atomic
+    def perform_create(self, serializer):
+        event = get_object_or_404(
+            managed_events(self.request.user).select_for_update(), pk=self.kwargs["pk"]
+        )
+        email = serializer.validated_data.pop("email")
+        user = get_object_or_404(User, email__iexact=email, is_active=True)
+        if StaffAssignment.objects.filter(event=event, user=user).exists():
+            raise services.Conflict("User is already assigned to this event.")
+        assignment = serializer.save(event=event, user=user)
+        services.record_audit(event, self.request.user, "staff.assigned", assignment)
+
+
+class EventStaffDetail(APIView):
+    @transaction.atomic
+    def delete(self, request, pk, user_id):
+        event = get_object_or_404(managed_events(request.user).select_for_update(), pk=pk)
+        assignment = get_object_or_404(StaffAssignment, event=event, user_id=user_id)
+        services.record_audit(event, request.user, "staff.removed", assignment)
+        assignment.delete()
+        return Response(status=204)
 
 
 class TicketDetail(generics.RetrieveAPIView):
@@ -319,6 +367,8 @@ class TicketQR(APIView):
 
 
 class VerifyTicket(APIView):
+    permission_classes = [permissions.IsAuthenticated, CanCheckInEvent]
+
     def post(self, request, pk=None):
         serializer = QRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -329,9 +379,10 @@ class VerifyTicket(APIView):
         )
         ticket = get_object_or_404(
             Ticket.objects.select_related("order_item__order"),
-            order_item__order__event__in=managed_events(request.user),
+            order_item__order__event__in=scan_events(request.user),
             **lookup,
         )
+        self.check_object_permissions(request, ticket.order_item.order.event)
         services.check_qr(ticket, serializer.validated_data["qr_token"])
         return Response(
             {"valid": ticket.status == "valid", "ticket": TicketSerializer(ticket).data}
@@ -339,6 +390,8 @@ class VerifyTicket(APIView):
 
 
 class CheckIn(APIView):
+    permission_classes = [permissions.IsAuthenticated, CanCheckInEvent]
+
     def post(self, request, pk=None):
         serializer = QRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -346,8 +399,14 @@ class CheckIn(APIView):
             pk = get_object_or_404(
                 Ticket,
                 identifier=services.qr_identifier(serializer.validated_data["qr_token"]),
-                order_item__order__event__in=managed_events(request.user),
+                order_item__order__event__in=scan_events(request.user),
             ).pk
+        ticket = get_object_or_404(
+            Ticket.objects.select_related("order_item__order__event"),
+            pk=pk,
+            order_item__order__event__in=scan_events(request.user),
+        )
+        self.check_object_permissions(request, ticket.order_item.order.event)
         ticket = services.check_in(pk, request.user, serializer.validated_data["qr_token"])
         return Response(TicketSerializer(ticket).data)
 

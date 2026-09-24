@@ -1,6 +1,6 @@
 # Backend MVP API
 
-Implemented contract, September 13, 2026. This document supersedes the older
+Implemented contract, September 24, 2026. This document supersedes the older
 Phase 1 API proposal for the MVP routes listed below. Base: `/api`, JSON, no
 trailing slash. Protected requests use `Authorization: Bearer <access>`.
 Money is integer tiyn, currency KZT: `250000` means 2,500 KZT. Dates use ISO 8601
@@ -11,9 +11,13 @@ with a timezone. Unknown/read-only fields in create/update payloads return 400.
 | Method and path | Input / result |
 | --- | --- |
 | POST `/auth/register` | Email, password, optional first_name/last_name and account_type; 201 with `{user}` |
+| POST `/auth/verify-email` | `{uid, token}` from verification email → 200; token valid for 24 hours and single use |
+| POST `/auth/verify-email/request` | Authenticated user requests a fresh verification email; prior token is invalidated |
 | POST `/auth/login` | `{email, password}` → `{access, refresh, user}` |
 | POST `/auth/refresh` | `{refresh}` → new `{access, refresh}`; old refresh is consumed |
 | POST `/auth/logout` | `{refresh}` → 204; invalid/expired/previously revoked tokens return 401 |
+| POST `/auth/reset-password` | `{email}` → generic 200, whether the account exists or not |
+| POST `/auth/reset-password/confirm` | `{uid, token, new_password}` → 200; token valid for 1 hour and single use |
 | GET `/auth/me` | Current user, roles and organizer_profile |
 
 Organizer registration:
@@ -33,17 +37,23 @@ Organizer registration:
 
 For an attendee, omit account_type and organizer_profile. Organizer accounts
 also have attendee capability. Only administrative provisioning can grant
-platform_admin (`is_superuser`). Event check-in is owned by the organizer or
-platform admin; separate event staff assignment is deferred.
+platform_admin (`is_superuser`). Event Admin is granted by an organizer or
+platform admin for one event via the staff API below; it permits check-in
+and viewing that event's attendee list, not event editing or other events.
 
 Access tokens last 15 minutes; refresh tokens 7 days. Logout revokes refresh,
-while access expires naturally. Inactive accounts cannot log in, refresh or
-use protected API routes. Roles and event ownership come from live database
-records. Password validation and case-insensitive email uniqueness apply.
+while access expires naturally. Password reset invalidates existing access and
+refresh tokens by changing the password hash. Inactive accounts cannot log in,
+refresh or use protected API routes. Roles and event ownership come from live
+database records. Password validation and case-insensitive email uniqueness apply.
 Auth routes have a 60/minute per-IP local-cache throttle. Production with
 multiple workers needs a shared cache or proxy-level rate limits.
-Email verification and password recovery remain unimplemented; publication
-does not require verified email in this approved pet-project MVP.
+Registration sends a verification token to console email in local development.
+The API never returns verification or reset tokens. Reissuing either token
+invalidates its predecessor. Password reset requests return the same response
+for unknown or inactive accounts. Email verification is tracked separately
+from account activation; publication does not require verified email in this
+approved pet-project MVP.
 
 ## Events and inventory
 
@@ -61,6 +71,8 @@ does not require verified email in this approved pet-project MVP.
 | PATCH `/ticket-types/{id}` | Owner/admin changes type, including `hidden` |
 | GET `/me/events` | Organizer's events (all events for platform admin) |
 | GET `/events/{id}/attendees` | Owner/admin list of issued tickets and check-in statuses |
+| GET/POST `/events/{id}/staff` | Owner/platform admin lists assignments or grants Event Admin to an existing active user by `{email, can_check_in}` |
+| DELETE `/events/{id}/staff/{user_id}` | Owner/platform admin removes an assignment, 204 |
 
 Create event:
 
@@ -253,8 +265,8 @@ the demo. A real provider requires server-verified payment confirmation.
 | --- | --- |
 | GET `/tickets/{id}` | Purchaser, event owner or platform admin only |
 | GET `/tickets/{id}/qr` | Same authorization; SVG QR image, private/no-store |
-| POST `/tickets/verify` | Owner/admin sends `{qr_token: "scanned text"}`; returns `{valid, ticket}` |
-| POST `/tickets/check-in` | Owner/admin sends scanned token; atomically marks checked_in |
+| POST `/tickets/verify` | Event owner, assigned Event Admin with `can_check_in`, or platform admin sends `{qr_token: "scanned text"}`; returns `{valid, ticket}` |
+| POST `/tickets/check-in` | Same event-scoped permission; atomically marks checked_in |
 | POST `/tickets/{id}/verify` | Same verification, additionally binds token to numeric ID |
 | POST `/tickets/{id}/check-in` | Same check-in, additionally binds token to numeric ID |
 
@@ -263,7 +275,7 @@ issued_at, checked_in_at, qr_token. The QR encodes a UUID signed with a dedicate
 admission salt. It is an admission credential: keep it private. Unpublishing an
 event stops sales but does not cancel already-issued tickets. Verification is
 read-only; check-in rejects a repeated scan with 409 and records operator/time.
-There is no check-in time window in the MVP; authorized organizers may test
+There is no check-in time window in the MVP; authorized staff may test
 admission before the event. Individual holder details and undo are deferred.
 
 ## Errors and pagination

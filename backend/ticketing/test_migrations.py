@@ -5,21 +5,22 @@ from django.db.migrations.executor import MigrationExecutor
 from django.test import TransactionTestCase
 from django.utils import timezone
 
+from accounts.models import OrganizerProfile, User
+
 
 class ExistingOrdersMigrationTests(TransactionTestCase):
     before = ("ticketing", "0002_event_category_images_visibility")
     after = ("ticketing", "0003_refunds_promo_campaigns_audit")
+    latest = ("ticketing", "0004_staffassignment")
 
     def tearDown(self):
-        MigrationExecutor(connection).migrate([self.after])
+        MigrationExecutor(connection).migrate([self.latest])
         super().tearDown()
 
     def test_existing_order_subtotal_preserves_original_total(self):
         executor = MigrationExecutor(connection)
         executor.migrate([self.before])
         apps = executor.loader.project_state([self.before]).apps
-        User = apps.get_model("accounts", "User")
-        OrganizerProfile = apps.get_model("accounts", "OrganizerProfile")
         Event = apps.get_model("ticketing", "Event")
         Order = apps.get_model("ticketing", "Order")
         user = User.objects.create(email="host@example.com", password="unused")
@@ -28,7 +29,7 @@ class ExistingOrdersMigrationTests(TransactionTestCase):
         )
         now = timezone.now()
         event = Event.objects.create(
-            organizer=organizer,
+            organizer_id=organizer.pk,
             title="Concert",
             venue="Hall",
             starts_at=now + timedelta(days=1),
@@ -36,8 +37,8 @@ class ExistingOrdersMigrationTests(TransactionTestCase):
             capacity=10,
         )
         order = Order.objects.create(
-            purchaser=user,
-            event=event,
+            purchaser_id=user.pk,
+            event_id=event.pk,
             status="confirmed",
             total_minor=9000,
             expires_at=now + timedelta(minutes=15),

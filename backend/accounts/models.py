@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.contrib.auth.base_user import BaseUserManager
 from django.contrib.auth.models import AbstractUser
@@ -43,6 +45,8 @@ class User(AbstractUser):
     username = None
     email = models.EmailField(unique=True)
     email_verified_at = models.DateTimeField(null=True, blank=True)
+    email_verification_nonce = models.UUIDField(default=uuid.uuid4, editable=False)
+    password_reset_nonce = models.UUIDField(default=uuid.uuid4, editable=False)
 
     USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []

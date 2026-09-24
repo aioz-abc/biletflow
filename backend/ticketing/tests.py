@@ -8,6 +8,57 @@ from accounts.models import OrganizerProfile, User
 
 
 class TicketingAPITests(TestCase):
+    def test_event_admin_assignment_allows_scanning_only_for_its_event(self):
+        event, kind = self.inventory()
+        other_event, other_kind = self.inventory()
+        staff = User.objects.create_user("scanner@example.com", "secret")
+        self.client.force_authenticate(self.buyer)
+        self.assertEqual(
+            self.client.post(f"/api/events/{event}/staff", {"email": staff.email}).status_code,
+            404,
+        )
+        order = self.reserve(event, kind).json()
+        ticket = self.client.post(
+            f"/api/orders/{order['id']}/checkout", {"outcome": "success"}
+        ).json()["tickets"][0]
+        second_order = self.reserve(other_event, other_kind).json()
+        second_ticket = self.client.post(
+            f"/api/orders/{second_order['id']}/checkout", {"outcome": "success"}
+        ).json()["tickets"][0]
+        self.client.force_authenticate(self.owner)
+        created = self.client.post(f"/api/events/{event}/staff", {"email": staff.email})
+        self.assertEqual(created.status_code, 201, created.content)
+        self.assertEqual(self.client.get(f"/api/events/{event}/staff").json()["count"], 1)
+        from ticketing.permissions import scan_events
+
+        self.assertIn(event, list(scan_events(staff).values_list("pk", flat=True)), created.json())
+        self.client.force_authenticate(staff)
+        self.assertIn("event_admin", self.client.get("/api/auth/me").json()["roles"])
+        verified = self.client.post("/api/tickets/verify", {"qr_token": ticket["qr_token"]})
+        self.assertEqual(verified.status_code, 200, verified.content)
+        self.assertEqual(
+            self.client.post("/api/tickets/check-in", {"qr_token": ticket["qr_token"]}).status_code,
+            200,
+        )
+        self.assertEqual(self.client.get(f"/api/events/{event}/attendees").status_code, 200)
+        self.assertEqual(
+            self.client.post(
+                "/api/tickets/verify", {"qr_token": second_ticket["qr_token"]}
+            ).status_code,
+            404,
+        )
+        self.assertEqual(self.client.get(f"/api/events/{other_event}/attendees").status_code, 404)
+        self.assertEqual(
+            self.client.patch(f"/api/events/{event}", {"title": "No"}).status_code, 404
+        )
+        self.client.force_authenticate(self.owner)
+        self.assertEqual(
+            self.client.delete(f"/api/events/{event}/staff/{staff.pk}").status_code, 204
+        )
+        self.client.force_authenticate(staff)
+        self.assertNotIn("event_admin", self.client.get("/api/auth/me").json()["roles"])
+        self.assertEqual(self.client.get(f"/api/events/{event}/attendees").status_code, 404)
+
     def test_malformed_event_payload_and_attendee_cannot_create_event(self):
         self.assertEqual(self.client.post("/api/events", [{}], format="json").status_code, 400)
         self.client.force_authenticate(self.buyer)
