@@ -55,6 +55,7 @@ does not require verified email in this approved pet-project MVP.
 | PATCH `/events/{id}` | Owner/admin updates event |
 | DELETE `/events/{id}` | Owner/admin deletes event only if it has no orders |
 | POST `/events/{id}/publish` | `{published: true}` or `{published: false}` |
+| POST `/events/{id}/duplicate` | Owner/admin copies event fields + ticket types into a new unpublished draft, 201 |
 | GET `/events/{id}/ticket-types` | Ticket types; hidden types visible to owner/admin only |
 | POST `/events/{id}/ticket-types` | Owner/admin adds a type |
 | PATCH `/ticket-types/{id}` | Owner/admin changes type, including `hidden` |
@@ -68,15 +69,25 @@ Create event:
   "title": "Student concert",
   "description": "Live music",
   "venue": "Almaty, Main Hall",
+  "category": "music",
+  "images": ["https://example.com/poster.jpg"],
   "starts_at": "2027-01-20T19:00:00+05:00",
   "ends_at": "2027-01-20T21:00:00+05:00",
-  "capacity": 100
+  "capacity": 100,
+  "visibility": "public"
 }
 ```
 
-Venue is a string for this MVP. Event responses include id, organizer (profile
-ID) and published. Capacity must be 1–1,000,000; start must be future when set,
-end later than start. An event with any historical orders cannot be deleted.
+Venue is a string for this MVP. `category` is free text (blank allowed);
+`images` is a list of up to 10 URL strings (no file upload in this MVP, so the
+client hosts the image and passes a link). `visibility` is `public` (default,
+listed and publicly retrievable), `unlisted` (retrievable by ID/link, excluded
+from `GET /events`) or `private` (owner/admin only, even by ID). Event
+responses include id, organizer (profile ID) and published. Capacity must be
+1–1,000,000; start must be future when set, end later than start. An event
+with any historical orders cannot be deleted. Duplicating an event copies
+these fields plus its ticket types into a new unpublished draft with no
+inventory sold or reserved.
 
 Create ticket type:
 
