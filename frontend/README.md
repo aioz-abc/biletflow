@@ -1,3 +1,13 @@
+# Admin portal (Mirat, Phase 2)
+
+Run `npm ci` then `npm run dev` with Node 24. Open `/admin/login`.
+The Django backend must be running; create an administrator with
+`docker compose exec web python manage.py createsuperuser` from the repository root.
+
+Run `npm run lint`, `npm test`, and `npm run build` before committing.
+See [Phase 2 report](../docs/REPORT_Mirat_Phase2.md) for demo steps, scope,
+API integration, and validation limitations.
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.

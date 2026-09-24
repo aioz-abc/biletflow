@@ -8,38 +8,6 @@ const events = [
   { id: 3, title: 'Design Meetup', date: '10 сентября 2026', status: 'Completed' },
   { id: 4, title: 'Autumn Concert', date: '12 сентября 2026', status: 'Cancelled' },
 ]
-const records = {
-  users: [['U-01', 'Demo Organizer', 'organizer'], ['U-02', 'Demo Attendee', 'attendee']],
-  events: events.map(event => [`E-0${event.id}`, event.title, event.status]),
-  orders: [['O-01', 'Almaty Tech Night · 2 билета', '10 000 ₸'], ['O-02', 'Design Meetup · 1 билет', '2 500 ₸']],
-}
-
-function Login() {
-  return <section className="mw-panel mw-login">
-    <p className="mw-eyebrow">PLATFORM ADMIN</p><h2>Вход в управление</h2>
-    <p>Макет формы входа. Авторизация будет подключена на этапе 2.</p>
-    <label>Email<input type="email" placeholder="admin@example.com" disabled /></label>
-    <label>Пароль<input type="password" placeholder="Подключение на этапе 2" disabled /></label>
-    <button disabled>Войти — скоро</button>
-    <a className="mw-button" href="/admin">Посмотреть демо панели →</a>
-    <small>Демо открыто всем и не предоставляет административных прав.</small>
-  </section>
-}
-
-function Dashboard() {
-  const [type, setType] = useState('events')
-  const [query, setQuery] = useState('')
-  const rows = records[type].filter(row => row.join(' ').toLowerCase().includes(query.toLowerCase()))
-  return <>
-    <div className="mw-stats">{[['Пользователи', '2'], ['События', '4'], ['Заказы', '2']].map(([label, value]) => <section className="mw-panel" key={label}><p>{label}</p><strong>{value}</strong><small>Демонстрационные записи</small></section>)}</div>
-    <section className="mw-panel"><h2>Поиск на платформе</h2><div className="mw-controls">
-      <label>Категория<select value={type} onChange={event => setType(event.target.value)}><option value="events">События</option><option value="users">Пользователи</option><option value="orders">Заказы</option></select></label>
-      <label>Поиск<input type="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Название, имя или номер" /></label>
-    </div><div className="mw-table"><table><thead><tr><th>ID</th><th>Запись</th><th>Статус / сведения</th></tr></thead><tbody>{rows.map(row => <tr key={row[0]}>{row.map((cell, index) => <td key={index}>{cell}</td>)}</tr>)}</tbody></table></div>
-    {rows.length === 0 && <p role="status">Ничего не найдено. Попробуйте другой запрос.</p>}</section>
-  </>
-}
-
 function Campaign() {
   const [preview, setPreview] = useState(null)
   const [discountType, setDiscountType] = useState('percent')
@@ -81,5 +49,5 @@ function History() {
 
 export default function MiratWorkspace({ path }) {
   const title = screens.find(([route]) => route === path)?.[1]
-  return <div className="mw"><aside><a className="mw-brand" href="/">biletflow<span>WORKSPACE / PHASE 01</span></a><nav aria-label="Макеты Мирата">{screens.map(([route, label]) => <a key={route} href={route} aria-current={path === route ? 'page' : undefined}>{label}</a>)}</nav><p>Мират · Admin & Analytics<br />Отчёт 01 / 14 сентября</p></aside><main><header><p className="mw-eyebrow">BILETFLOW · ПРОТОТИП ИНТЕРФЕЙСА</p><h1>{title}</h1><p className="mw-notice">Демо · вымышленные данные · без подключения API</p></header>{path === '/admin/login' ? <Login /> : path === '/admin' ? <Dashboard /> : path.endsWith('/new') ? <Campaign /> : path.endsWith('/analytics') ? <Analytics /> : <History />}</main></div>
+  return <div className="mw"><aside><a className="mw-brand" href="/">biletflow<span>WORKSPACE / PHASE 01</span></a><nav aria-label="Макеты Мирата">{screens.map(([route, label]) => <a key={route} href={route} aria-current={path === route ? 'page' : undefined}>{label}</a>)}</nav><p>Мират · Admin & Analytics<br />Отчёт 01 / 14 сентября</p></aside><main><header><p className="mw-eyebrow">BILETFLOW · ПРОТОТИП ИНТЕРФЕЙСА</p><h1>{title}</h1><p className="mw-notice">Демо · вымышленные данные · без подключения API</p></header>{path.endsWith('/new') ? <Campaign /> : path.endsWith('/analytics') ? <Analytics /> : <History />}</main></div>
 }
