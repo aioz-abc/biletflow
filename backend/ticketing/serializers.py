@@ -25,7 +25,7 @@ class StrictModelSerializer(serializers.ModelSerializer):
 class EventSerializer(StrictModelSerializer):
     capacity = serializers.IntegerField(min_value=1, max_value=1000000)
     images = serializers.ListField(
-        child=serializers.CharField(max_length=500), required=False, max_length=10
+        child=serializers.URLField(max_length=500), required=False, max_length=10
     )
 
     class Meta:

@@ -122,7 +122,7 @@ class DuplicateEvent(APIView):
         original = get_object_or_404(managed_events(request.user).select_for_update(), pk=pk)
         copy = Event.objects.create(
             organizer=original.organizer,
-            title=f"Copy of {original.title}",
+            title=f"Copy of {original.title}"[:200],
             description=original.description,
             venue=original.venue,
             category=original.category,
