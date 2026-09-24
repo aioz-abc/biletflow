@@ -5,6 +5,13 @@ from django.conf import settings
 from django.db import migrations, models
 
 
+def backfill_order_subtotal(apps, schema_editor):
+    order = apps.get_model("ticketing", "Order")
+    order.objects.using(schema_editor.connection.alias).update(
+        subtotal_minor=models.F("total_minor")
+    )
+
+
 class Migration(migrations.Migration):
     dependencies = [
         ("ticketing", "0002_event_category_images_visibility"),
@@ -43,6 +50,7 @@ class Migration(migrations.Migration):
             name="subtotal_minor",
             field=models.PositiveBigIntegerField(default=0),
         ),
+        migrations.RunPython(backfill_order_subtotal, migrations.RunPython.noop),
         migrations.AlterField(
             model_name="order",
             name="status",

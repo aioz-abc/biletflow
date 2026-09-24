@@ -53,7 +53,7 @@ does not require verified email in this approved pet-project MVP.
 | POST `/events` | Organizer creates a draft |
 | GET `/events/{id}` | Public if published; drafts visible to owner/admin only |
 | PATCH `/events/{id}` | Owner/admin updates event |
-| DELETE `/events/{id}` | Owner/admin deletes event only if it has no orders |
+| DELETE `/events/{id}` | Owner/admin deletes a draft only if it has no orders, campaigns or audit history |
 | POST `/events/{id}/publish` | `{published: true}` or `{published: false}` |
 | POST `/events/{id}/duplicate` | Owner/admin copies event fields + ticket types into a new unpublished draft, 201 |
 | GET `/events/{id}/ticket-types` | Ticket types; hidden types visible to owner/admin only |
@@ -122,6 +122,7 @@ reservations; a valid hold can complete until its own expiry.
 | POST `/orders` | Create a 15-minute reservation, 201 |
 | GET `/orders/{id}` | Purchaser only |
 | POST `/orders/{id}/checkout` | Purchaser sends `{outcome: "success"}` or `{outcome: "failure"}`, plus optional `promo_code` |
+| POST `/orders/{id}/preview` | Purchaser sends optional `{promo_code}` and sees a provisional subtotal, discount and total before checkout |
 | POST `/orders/{id}/cancel` | Purchaser cancels an unconfirmed order, or a confirmed free registration, releasing inventory |
 | POST `/orders/{id}/refund` | Event organizer or admin fully refunds a confirmed paid order |
 | GET `/me/orders` | Purchaser's orders |
@@ -155,13 +156,16 @@ the event in PostgreSQL.
 `discount_minor` the server-computed promo discount, and `total_minor` the
 amount actually charged. Totals are always recalculated on the server; a
 client-supplied discount is rejected like any other unknown field.
+Preview does not redeem a code or change the order. Checkout validates the code
+again, since its validity and remaining redemption count may change meanwhile.
 
 ## Cancellations and refunds
 
 API status is `pending`, `expired`, `cancelled`, `confirmed` or `refunded`.
 
-`POST /orders/{id}/cancel` is the purchaser's endpoint. A pending order cancels
-as before. A confirmed order cancels only when it is free (`total_minor` 0);
+`POST /orders/{id}/cancel` accepts the purchaser, event organizer or admin.
+A pending order cancels as before. A confirmed order cancels only when it is
+free (`total_minor` 0) and none of its tickets has been checked in;
 its tickets become `cancelled`. A confirmed paid order returns 409 and must go
 through the refund endpoint so a Refund row and audit entry always exist.
 
@@ -182,7 +186,9 @@ return to the sellable pool, exactly as an expired or cancelled hold already doe
 | GET `/events/{id}/audit-log` | Organizer/admin reads the event's append-only activity timeline |
 
 AuditLog entries carry event, actor, action, entity_type, entity_id,
-description and created_at, newest first. Rows are only ever appended.
+description and created_at, newest first. Event and ticket-type edits,
+publication, reservations, promo redemption, payment attempts, refunds,
+cancellations and check-ins are recorded. Rows are only ever appended.
 
 ## Promo codes and campaigns
 
@@ -190,8 +196,10 @@ description and created_at, newest first. Rows are only ever appended.
 | --- | --- |
 | POST `/events/{id}/campaigns` | Organizer/admin creates a campaign, 201; response includes a one-time `campaign_link` |
 | GET `/events/{id}/campaigns` | Organizer/admin lists campaigns with their codes and a redemption report |
+| PATCH `/campaigns/{id}` | Organizer/admin updates a campaign, including `enabled: false` to stop a code |
 | GET `/campaigns/{id}/qr` | Campaign QR as SVG, encoding an HTTPS campaign link |
 | GET `/campaign-links/{token}` | Public: resolves a scanned campaign token to its event and promo code |
+| GET `/c/{token}` | Public campaign link; redirects to the frontend event page with the promo code |
 
 Create campaign:
 
@@ -222,13 +230,19 @@ the order subtotal, and recorded on a PromoRedemption tied one-to-one to the
 order, so an order can never redeem twice.
 
 The campaign report returned with each campaign carries redemptions, orders,
-tickets_sold, gross_minor, discount_minor and net_minor.
+active tickets_sold, gross_minor, discount_minor, refund_minor and net_minor.
+Net subtracts both discounts and full refunds.
 
 Campaign QR codes are functionally distinct from admission QR codes. A campaign
-link carries an opaque random token - never a discount amount - resolved by
-SHA-256 digest lookup, while admission tokens are Django-signed ticket
-identifiers under a separate salt. The admission and verification endpoints
-therefore reject a campaign token outright, and a test asserts this.
+link carries an opaque HMAC token derived from its code - never a discount
+amount - resolved by SHA-256 digest lookup, while admission tokens are
+Django-signed ticket identifiers under a separate salt. Generating the QR
+again preserves existing campaign links. The admission and verification
+endpoints reject a campaign token outright.
+`FRONTEND_BASE_URL` selects the frontend origin for `/c/{token}` redirects
+(`http://localhost:5173` in local development; HTTPS is required outside debug).
+The frontend `/events/{id}` screen must prefill the promo code from its query
+string and call `POST /orders/{id}/preview` before checkout.
 
 This API performs no real charge. The client-selected outcome exists only for
 the demo. A real provider requires server-verified payment confirmation.

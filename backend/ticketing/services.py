@@ -1,13 +1,14 @@
 import hashlib
-import secrets
 from datetime import timedelta
 from uuid import UUID
 
+from django.conf import settings
 from django.core import signing
 from django.db import transaction
 from django.db.models import Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from rest_framework.exceptions import APIException, NotFound, ValidationError
 
 from .models import (
@@ -87,16 +88,11 @@ def reserve(user, event_id, items):
             for kind, quantity in selected
         ]
     )
+    record_audit(event, user, "order.created", order)
     return order
 
 
-@transaction.atomic
-def checkout(user, order_id, outcome, promo_code=None):
-    initial = get_object_or_404(Order, pk=order_id, purchaser=user)
-    event = Event.objects.select_for_update().get(pk=initial.event_id)
-    order = Order.objects.select_for_update().get(pk=order_id)
-    if order.status == "confirmed":
-        return order
+def ensure_checkout_available(user, event, order):
     if order.status != "pending" or order.expires_at <= timezone.now():
         raise Conflict("Order is cancelled or expired.")
     if (
@@ -109,7 +105,33 @@ def checkout(user, order_id, outcome, promo_code=None):
         )
     ):
         raise Conflict("Event is unavailable.")
+
+
+def preview_order(user, order_id, promo_code=None):
+    order = get_object_or_404(
+        Order.objects.select_related("event__organizer__user"), pk=order_id, purchaser=user
+    )
+    ensure_checkout_available(user, order.event, order)
+    subtotal = sum(item.unit_price_minor * item.quantity for item in order.items.all())
+    discount = price_promo(order, subtotal, promo_code)[1] if promo_code else 0
+    return {
+        "subtotal_minor": subtotal,
+        "discount_minor": discount,
+        "total_minor": subtotal - discount,
+        "currency": order.currency,
+    }
+
+
+@transaction.atomic
+def checkout(user, order_id, outcome, promo_code=None):
+    initial = get_object_or_404(Order, pk=order_id, purchaser=user)
+    event = Event.objects.select_for_update().get(pk=initial.event_id)
+    order = Order.objects.select_for_update().get(pk=order_id)
+    if order.status == "confirmed":
+        return order
+    ensure_checkout_available(user, event, order)
     if outcome == "failure":
+        record_audit(event, user, "payment.failed", order, "Simulated payment failed.")
         return order
     # Totals are always recomputed from purchase-time item prices; a client never
     # supplies a discount. The event is already locked above, so redemption counting
@@ -127,8 +149,10 @@ def checkout(user, order_id, outcome, promo_code=None):
     order.total_minor = subtotal - discount
     if redemption is not None:
         redemption.save()
+        record_audit(event, user, "promo.redeemed", redemption)
     if order.total_minor:
-        Payment.objects.create(order=order, amount_minor=order.total_minor)
+        payment = Payment.objects.create(order=order, amount_minor=order.total_minor)
+        record_audit(event, user, "payment.completed", payment, f"{payment.amount_minor} tiyn.")
     Ticket.objects.bulk_create(
         [Ticket(order_item=item) for item in order.items.all() for _ in range(item.quantity)]
     )
@@ -175,6 +199,7 @@ def check_in(ticket_id, user, token):
     ticket.checked_in_at = timezone.now()
     ticket.checked_in_by = user
     ticket.save(update_fields=["status", "checked_in_at", "checked_in_by"])
+    record_audit(event, user, "ticket.checked_in", ticket)
     return ticket
 
 
@@ -191,14 +216,32 @@ def record_audit(event, actor, action, entity, description=""):
     )
 
 
+def describe_changes(instance, changes):
+    value_fields = {
+        "capacity",
+        "quantity",
+        "price_minor",
+        "enabled",
+        "discount_type",
+        "discount_value",
+        "visibility",
+        "hidden",
+    }
+    return ", ".join(
+        f"{field}: {getattr(instance, field)} -> {value}"
+        if field in value_fields
+        else f"{field} updated"
+        for field, value in changes.items()
+    )[:300]
+
+
 def normalize_code(code):
     return " ".join(str(code).split()).upper()
 
 
-def campaign_link_token():
-    # Opaque, high-entropy and unrelated to the admission signer, so a Campaign QR can
-    # never be mistaken for (or replayed as) an admission credential - SRS 4.14.
-    return secrets.token_urlsafe(32)
+def campaign_link_token(code):
+    # Stable opaque token can be regenerated for a QR without storing bearer secrets.
+    return salted_hmac("biletflow.campaign.v1", code).hexdigest()
 
 
 def link_token_digest(token):
@@ -206,7 +249,19 @@ def link_token_digest(token):
 
 
 def campaign_link(request, token):
-    return request.build_absolute_uri(f"/c/{token}")
+    url = request.build_absolute_uri(f"/c/{token}")
+    return url if settings.DEBUG else url.replace("http://", "https://", 1)
+
+
+def resolve_campaign_link(token):
+    code = get_object_or_404(
+        PromoCode.objects.select_related("campaign__event__organizer__user"),
+        link_token_digest=link_token_digest(token),
+    )
+    event = code.campaign.event
+    if not event.published or event.visibility == "private" or not event.organizer.user.is_active:
+        raise NotFound()
+    return code
 
 
 def discountable(order, campaign, subtotal):
@@ -258,14 +313,20 @@ def invalidate_tickets(order, status):
 
 @transaction.atomic
 def cancel_order(user, order_id):
-    initial = get_object_or_404(Order, pk=order_id, purchaser=user)
+    initial = get_object_or_404(Order, pk=order_id)
     event = Event.objects.select_for_update().get(pk=initial.event_id)
+    if user.pk != initial.purchaser_id and not (
+        user.is_superuser or event.organizer.user_id == user.pk
+    ):
+        raise NotFound()
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status == "confirmed":
         # SRS 4.9 allows cancelling free registrations; paid orders must go through
         # the refund endpoint so a Refund row and its audit entry are always created.
         if order.total_minor:
             raise Conflict("Paid orders must be refunded, not cancelled.")
+        if Ticket.objects.filter(order_item__order=order, status="checked_in").exists():
+            raise Conflict("Checked-in registrations cannot be cancelled.")
         invalidate_tickets(order, "cancelled")
         order.status = "cancelled"
         order.save(update_fields=["status"])
@@ -275,6 +336,7 @@ def cancel_order(user, order_id):
         raise Conflict("Order is already cancelled or refunded.")
     order.status = "cancelled"
     order.save(update_fields=["status"])
+    record_audit(event, user, "order.cancelled", order, "Pending reservation cancelled.")
     return order
 
 

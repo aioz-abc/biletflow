@@ -1,15 +1,17 @@
 import secrets
 from io import BytesIO
+from urllib.parse import urlencode
 
 import qrcode
+from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
-from django.http import HttpResponse
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from qrcode.image.svg import SvgPathImage
 from rest_framework import generics, permissions
-from rest_framework.exceptions import NotFound, PermissionDenied
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -23,6 +25,7 @@ from .serializers import (
     CheckoutSerializer,
     EventSerializer,
     OrderSerializer,
+    PreviewSerializer,
     PublishSerializer,
     QRSerializer,
     RefundSerializer,
@@ -94,14 +97,19 @@ class EventDetail(generics.RetrieveUpdateDestroyAPIView):
         serializer.is_valid(raise_exception=True)
         if serializer.validated_data.get("capacity", event.capacity) < services.reserved(event.pk):
             raise services.Conflict("Capacity cannot be below sold and reserved tickets.")
+        description = services.describe_changes(event, serializer.validated_data)
         serializer.save()
+        if description:
+            services.record_audit(event, request.user, "event.updated", event, description)
         return Response(serializer.data)
 
     @transaction.atomic
     def destroy(self, request, *args, **kwargs):
         event = get_object_or_404(self.get_queryset().select_for_update(), pk=kwargs["pk"])
-        if event.orders.exists():
-            raise services.Conflict("Events with orders cannot be deleted; unpublish instead.")
+        if event.orders.exists() or event.campaigns.exists() or event.audit_entries.exists():
+            raise services.Conflict(
+                "Events with orders or campaigns cannot be deleted; unpublish instead."
+            )
         event.ticket_types.all().delete()
         event.delete()
         return Response(status=204)
@@ -117,6 +125,12 @@ class Publish(APIView):
             raise services.Conflict("Cannot publish an event that has started.")
         event.published = serializer.validated_data["published"]
         event.save(update_fields=["published"])
+        services.record_audit(
+            event,
+            request.user,
+            "event.published" if event.published else "event.unpublished",
+            event,
+        )
         return Response(EventSerializer(event).data)
 
 
@@ -174,7 +188,8 @@ class TicketTypeList(generics.ListCreateAPIView):
         event = get_object_or_404(
             managed_events(self.request.user).select_for_update(), pk=self.kwargs["pk"]
         )
-        serializer.save(event=event)
+        kind = serializer.save(event=event)
+        services.record_audit(event, self.request.user, "ticket_type.created", kind)
 
 
 class TicketTypeDetail(generics.UpdateAPIView):
@@ -192,7 +207,12 @@ class TicketTypeDetail(generics.UpdateAPIView):
             kind.event_id, kind.pk
         ):
             raise services.Conflict("Quantity cannot be below sold and reserved tickets.")
+        description = services.describe_changes(kind, serializer.validated_data)
         serializer.save()
+        if description:
+            services.record_audit(
+                kind.event, request.user, "ticket_type.updated", kind, description
+            )
         return Response(serializer.data)
 
 
@@ -230,6 +250,15 @@ class Checkout(APIView):
             serializer.validated_data.get("promo_code"),
         )
         return Response(OrderSerializer(order).data)
+
+
+class PreviewOrder(APIView):
+    def post(self, request, pk):
+        serializer = PreviewSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(
+            services.preview_order(request.user, pk, serializer.validated_data.get("promo_code"))
+        )
 
 
 class CancelOrder(APIView):
@@ -352,12 +381,13 @@ class CampaignList(generics.ListCreateAPIView):
         )
         campaign = serializer.save(event=event)
         # Every campaign gets exactly one generated code plus its Campaign QR token.
-        token = services.campaign_link_token()
+        code_text = services.normalize_code(
+            f"{campaign.name[:6].strip() or 'PROMO'}-{secrets.token_hex(3)}"
+        )
+        token = services.campaign_link_token(code_text)
         PromoCode.objects.create(
             campaign=campaign,
-            code=services.normalize_code(
-                f"{campaign.name[:6].strip() or 'PROMO'}-{secrets.token_hex(3)}"
-            ),
+            code=code_text,
             link_token_digest=services.link_token_digest(token),
         )
         services.record_audit(event, self.request.user, "campaign.created", campaign, campaign.name)
@@ -375,10 +405,8 @@ class CampaignQR(APIView):
         campaign = get_object_or_404(
             PromotionalCampaign, pk=pk, event__in=managed_events(request.user)
         )
-        token = services.campaign_link_token()
         code = campaign.codes.first()
-        code.link_token_digest = services.link_token_digest(token)
-        code.save(update_fields=["link_token_digest"])
+        token = services.campaign_link_token(code.code)
         output = BytesIO()
         qrcode.make(services.campaign_link(request, token), image_factory=SvgPathImage).save(output)
         response = HttpResponse(output.getvalue(), content_type="image/svg+xml")
@@ -389,17 +417,31 @@ class CampaignQR(APIView):
         return response
 
 
+class CampaignDetail(APIView):
+    @transaction.atomic
+    def patch(self, request, pk):
+        campaign = get_object_or_404(
+            PromotionalCampaign, pk=pk, event__in=managed_events(request.user)
+        )
+        event = Event.objects.select_for_update().get(pk=campaign.event_id)
+        campaign.refresh_from_db()
+        serializer = CampaignSerializer(
+            campaign, data=request.data, partial=True, context={"event": event}
+        )
+        serializer.is_valid(raise_exception=True)
+        description = services.describe_changes(campaign, serializer.validated_data)
+        serializer.save()
+        if description:
+            services.record_audit(event, request.user, "campaign.updated", campaign, description)
+        return Response(serializer.data)
+
+
 class CampaignLinkResolve(APIView):
     permission_classes = [permissions.AllowAny]
 
     def get(self, request, token):
-        code = get_object_or_404(
-            PromoCode.objects.select_related("campaign__event"),
-            link_token_digest=services.link_token_digest(token),
-        )
+        code = services.resolve_campaign_link(token)
         campaign = code.campaign
-        if not campaign.event.published or campaign.event.visibility == "private":
-            raise NotFound()
         return Response(
             {
                 "event": campaign.event_id,
@@ -411,6 +453,19 @@ class CampaignLinkResolve(APIView):
                 "active": services.campaign_active(campaign),
             }
         )
+
+
+class CampaignRedirect(APIView):
+    permission_classes = [permissions.AllowAny]
+    authentication_classes = []
+
+    def get(self, request, token):
+        code = services.resolve_campaign_link(token)
+        url = (
+            f"{settings.FRONTEND_BASE_URL}/events/{code.campaign.event_id}"
+            f"?{urlencode({'promo_code': code.code})}"
+        )
+        return HttpResponseRedirect(url)
 
 
 class EventAuditLog(generics.ListAPIView):

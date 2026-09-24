@@ -470,3 +470,161 @@ class TicketingAPITests(TestCase):
             format="json",
         )
         self.assertEqual(response.status_code, 400, response.content)
+
+    def test_campaign_qr_does_not_revoke_the_created_link(self):
+        event, _kind = self.inventory()
+        created = self.campaign(event)
+        token = created["campaign_link"].rsplit("/", 1)[1]
+        self.assertEqual(self.client.get(f"/api/campaigns/{created['id']}/qr").status_code, 200)
+        self.assertEqual(self.client.get(f"/api/campaigns/{created['id']}/qr").status_code, 200)
+        self.client.force_authenticate(None)
+        self.assertEqual(self.client.get(f"/api/campaign-links/{token}").status_code, 200)
+
+    def test_promo_preview_does_not_redeem_before_checkout(self):
+        from ticketing.models import PromoRedemption
+
+        event, kind = self.inventory()
+        code = self.campaign(event)["codes"][0]["code"]
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        response = self.client.post(
+            f"/api/orders/{order['id']}/preview", {"promo_code": code}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["subtotal_minor"], 10000)
+        self.assertEqual(response.json()["discount_minor"], 1000)
+        self.assertEqual(response.json()["total_minor"], 9000)
+        self.assertEqual(PromoRedemption.objects.count(), 0)
+        paid = self.client.post(
+            f"/api/orders/{order['id']}/checkout",
+            {"outcome": "success", "promo_code": code},
+        )
+        self.assertEqual(paid.json()["total_minor"], 9000)
+
+    def test_paid_checkout_is_recorded_in_event_audit_log(self):
+        event, kind = self.inventory()
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        self.client.post(f"/api/orders/{order['id']}/checkout", {"outcome": "failure"})
+        self.client.post(f"/api/orders/{order['id']}/checkout", {"outcome": "success"})
+        self.client.force_authenticate(self.owner)
+        actions = [
+            entry["action"]
+            for entry in self.client.get(f"/api/events/{event}/audit-log").json()["results"]
+        ]
+        self.assertIn("payment.completed", actions)
+        self.assertIn("payment.failed", actions)
+
+    def test_checked_in_free_registration_cannot_be_cancelled(self):
+        event, kind = self.inventory(price=0)
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        ticket = self.client.post(
+            f"/api/orders/{order['id']}/checkout", {"outcome": "success"}
+        ).json()["tickets"][0]
+        self.client.force_authenticate(self.owner)
+        self.client.post(f"/api/tickets/{ticket['id']}/check-in", {"qr_token": ticket["qr_token"]})
+        self.client.force_authenticate(self.buyer)
+        self.assertEqual(self.client.post(f"/api/orders/{order['id']}/cancel").status_code, 409)
+
+    def test_organizer_can_cancel_free_registration(self):
+        event, kind = self.inventory(price=0)
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        self.client.post(f"/api/orders/{order['id']}/checkout", {"outcome": "success"})
+        self.client.force_authenticate(self.owner)
+        response = self.client.post(f"/api/orders/{order['id']}/cancel")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["tickets"][0]["status"], "cancelled")
+
+    def test_campaign_can_be_disabled_after_creation(self):
+        event, kind = self.inventory()
+        campaign = self.campaign(event)
+        code = campaign["codes"][0]["code"]
+        response = self.client.patch(
+            f"/api/campaigns/{campaign['id']}", {"enabled": False}, format="json"
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        audit = self.client.get(f"/api/events/{event}/audit-log").json()["results"]
+        self.assertIn("enabled: True -> False", audit[0]["description"])
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        self.assertEqual(
+            self.client.post(
+                f"/api/orders/{order['id']}/checkout",
+                {"outcome": "success", "promo_code": code},
+            ).status_code,
+            400,
+        )
+
+    def test_campaign_report_subtracts_refunds(self):
+        event, kind = self.inventory()
+        campaign = self.campaign(event)
+        code = campaign["codes"][0]["code"]
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        self.client.post(
+            f"/api/orders/{order['id']}/checkout",
+            {"outcome": "success", "promo_code": code},
+        )
+        self.client.force_authenticate(self.owner)
+        self.client.post(f"/api/orders/{order['id']}/refund")
+        report = self.client.get(f"/api/events/{event}/campaigns").json()["results"][0]["report"]
+        self.assertEqual(report["refund_minor"], 9000)
+        self.assertEqual(report["net_minor"], 0)
+        self.assertEqual(report["tickets_sold"], 0)
+
+    def test_event_with_campaign_cannot_be_deleted(self):
+        event = self.event()
+        self.campaign(event)
+        self.assertEqual(self.client.delete(f"/api/events/{event}").status_code, 409)
+
+    def test_campaign_link_opens_the_event_page(self):
+        event, _kind = self.inventory()
+        campaign = self.campaign(event)
+        token = campaign["campaign_link"].rsplit("/", 1)[1]
+        self.client.force_authenticate(None)
+        response = self.client.get(f"/c/{token}")
+        self.assertEqual(response.status_code, 302, response.content)
+        self.assertIn(f"/events/{event}?promo_code=", response["Location"])
+
+    def test_event_history_includes_sales_edits_redemption_and_check_in(self):
+        event, kind = self.inventory()
+        self.client.patch(f"/api/events/{event}", {"capacity": 3})
+        self.client.patch(f"/api/ticket-types/{kind}", {"price_minor": 12000})
+        self.client.post(f"/api/events/{event}/publish", {"published": False})
+        self.client.post(f"/api/events/{event}/publish", {"published": True})
+        code = self.campaign(event)["codes"][0]["code"]
+        self.client.force_authenticate(self.buyer)
+        order = self.reserve(event, kind).json()
+        ticket = self.client.post(
+            f"/api/orders/{order['id']}/checkout",
+            {"outcome": "success", "promo_code": code},
+        ).json()["tickets"][0]
+        self.client.force_authenticate(self.owner)
+        self.client.post(f"/api/tickets/{ticket['id']}/check-in", {"qr_token": ticket["qr_token"]})
+        entries = self.client.get(f"/api/events/{event}/audit-log").json()["results"]
+        actions = {entry["action"] for entry in entries}
+        self.assertTrue(
+            {
+                "event.updated",
+                "event.published",
+                "ticket_type.updated",
+                "promo.redeemed",
+                "ticket.checked_in",
+            }
+            <= actions
+        )
+        self.assertTrue(
+            any(
+                entry["action"] == "event.updated" and "capacity: 2 -> 3" in entry["description"]
+                for entry in entries
+            )
+        )
+        self.assertTrue(
+            any(
+                entry["action"] == "ticket_type.updated"
+                and "price_minor: 10000 -> 12000" in entry["description"]
+                for entry in entries
+            )
+        )

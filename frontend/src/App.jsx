@@ -1,4 +1,9 @@
+import EventPage from './EventPage.jsx'
+
 function App() {
+  const eventId = window.location.pathname.match(/^\/events\/(\d+)\/?$/)?.[1]
+  if (eventId) return <EventPage eventId={eventId} />
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b bg-white">

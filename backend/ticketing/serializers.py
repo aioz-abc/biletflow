@@ -198,6 +198,10 @@ class CheckoutSerializer(StrictSerializer):
     promo_code = serializers.CharField(max_length=32, required=False, allow_blank=False)
 
 
+class PreviewSerializer(StrictSerializer):
+    promo_code = serializers.CharField(max_length=32, required=False, allow_blank=False)
+
+
 class PublishSerializer(StrictSerializer):
     published = serializers.BooleanField()
 
@@ -264,7 +268,9 @@ class CampaignSerializer(StrictModelSerializer):
         end = attrs.get("ends_at", getattr(self.instance, "ends_at", None))
         if start and end and end <= start:
             raise serializers.ValidationError({"ends_at": "Must be after starts_at."})
-        if attrs.get("discount_type") == "percent" and attrs["discount_value"] > 100:
+        discount_type = attrs.get("discount_type", getattr(self.instance, "discount_type", None))
+        discount_value = attrs.get("discount_value", getattr(self.instance, "discount_value", 0))
+        if discount_type == "percent" and discount_value > 100:
             raise serializers.ValidationError({"discount_value": "Percent cannot exceed 100."})
         event = self.context.get("event")
         kinds = attrs.get("ticket_types") or []
@@ -280,13 +286,19 @@ class CampaignSerializer(StrictModelSerializer):
         orders = [r.order for r in redemptions]
         gross = sum(order.subtotal_minor for order in orders)
         discount = sum(r.discount_minor for r in redemptions)
+        refunds = sum(
+            Refund.objects.filter(payment__order__in=orders).values_list("amount_minor", flat=True)
+        )
         return {
             "redemptions": len(redemptions),
             "orders": len({order.pk for order in orders}),
-            "tickets_sold": Ticket.objects.filter(order_item__order__in=orders).count(),
+            "tickets_sold": Ticket.objects.filter(
+                order_item__order__in=orders, status__in=["valid", "checked_in"]
+            ).count(),
             "gross_minor": gross,
             "discount_minor": discount,
-            "net_minor": gross - discount,
+            "refund_minor": refunds,
+            "net_minor": gross - discount - refunds,
         }
 
 
