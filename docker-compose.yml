@@ -24,6 +24,7 @@ services:
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:-django-insecure-local-biletflow-development-key-only}
       DJANGO_DEBUG: ${DJANGO_DEBUG:-1}
       DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-localhost,127.0.0.1}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
       POSTGRES_DB: ${POSTGRES_DB:-biletflow}
       POSTGRES_USER: ${POSTGRES_USER:-biletflow}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-biletflow-local-only}

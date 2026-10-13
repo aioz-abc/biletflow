@@ -39,3 +39,7 @@
 .mw-timeline li { margin: 22px 0; }
 @media (max-width: 900px) { .mw { grid-template-columns: 1fr; } .mw aside { padding: 18px; } .mw-brand { margin-bottom: 16px; } .mw nav { display: flex; flex-wrap: wrap; gap: 4px; } .mw aside > p { display: none; } .mw main { padding: 22px 16px; } .mw-columns { grid-template-columns: 1fr; } }
 @media (max-width: 520px) { .mw-stats { grid-template-columns: 1fr; gap: 0; } .mw-panel { padding: 18px; } }
+
+.mw nav button { text-align: left; }
+.mw nav button[aria-current] { background: #486d59; }
+.mw-account { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; overflow-wrap: anywhere; }
