@@ -1,39 +1,28 @@
 import { useEffect, useState } from 'react'
-import { api, getSession, onSessionChange, setSession } from '../api/client'
+import { session } from '../api/client'
 import { AuthContext } from './auth'
 
 export default function AuthProvider({ children }) {
-  const [session, setState] = useState(getSession)
+  const [user, setUser] = useState(session.getUser)
+  // With tokens left from before a reload, wait for /auth/me before routing.
+  const [ready, setReady] = useState(() => !session.hasSession())
 
-  useEffect(() => onSessionChange(setState), [])
-
-  async function login(email, password) {
-    const data = await api('/auth/login', {
-      method: 'POST',
-      body: { email, password },
-      auth: false,
-    })
-    setSession(data)
-    return data.user
-  }
+  useEffect(() => {
+    const unsubscribe = session.subscribe(setUser)
+    session.restore().catch(() => {}).finally(() => setReady(true))
+    return unsubscribe
+  }, [])
 
   async function logout() {
-    const current = getSession()
-    setSession(null) // log out locally even if the server call fails
-    if (current) {
-      await api('/auth/logout', {
-        method: 'POST',
-        body: { refresh: current.refresh },
-        auth: false,
-      }).catch(() => {})
-    }
+    // Local sign-out always happens; a failed revoke call is not shown.
+    await session.logout().catch(() => {})
   }
 
-  const user = session?.user ?? null
   const value = {
     user,
-    isOrganizer: Boolean(user?.roles.includes('organizer')),
-    login,
+    ready,
+    isOrganizer: Boolean(user?.roles?.includes('organizer')),
+    login: session.login,
     logout,
   }
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

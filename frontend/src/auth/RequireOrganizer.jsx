@@ -1,11 +1,10 @@
-import { Link, Navigate, useLocation } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useAuth } from './auth'
+import RequireAuth from './RequireAuth.jsx'
 
-export default function RequireOrganizer({ children }) {
-  const { user, isOrganizer } = useAuth()
-  const location = useLocation()
+function OrganizerOnly({ children }) {
+  const { isOrganizer } = useAuth()
 
-  if (!user) return <Navigate to="/login" replace state={{ from: location.pathname }} />
   if (!isOrganizer) {
     return (
       <main className="mx-auto max-w-xl px-6 py-20 text-center">
@@ -20,4 +19,12 @@ export default function RequireOrganizer({ children }) {
     )
   }
   return children
+}
+
+export default function RequireOrganizer({ children }) {
+  return (
+    <RequireAuth>
+      <OrganizerOnly>{children}</OrganizerOnly>
+    </RequireAuth>
+  )
 }
