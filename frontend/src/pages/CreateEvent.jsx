@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api, fieldErrors } from '../api/client'
+import TicketTypes from '../components/TicketTypes.jsx'
 
 const CATEGORIES = ['music', 'education', 'sports', 'tech', 'arts', 'business', 'other']
 
@@ -17,6 +18,31 @@ function toRange({ date, time, duration }) {
   return { starts_at: start.toISOString(), ends_at: end.toISOString() }
 }
 
+// Saved event -> form fields, in the browser's local zone (inverse of toRange).
+function toForm(event) {
+  const start = new Date(event.starts_at)
+  const pad = (n) => String(n).padStart(2, '0')
+  return {
+    title: event.title,
+    date: `${start.getFullYear()}-${pad(start.getMonth() + 1)}-${pad(start.getDate())}`,
+    time: `${pad(start.getHours())}:${pad(start.getMinutes())}`,
+    duration: String((new Date(event.ends_at) - start) / (60 * 60 * 1000)),
+    venue: event.venue,
+    category: event.category,
+    capacity: String(event.capacity),
+    description: event.description,
+  }
+}
+
+// PATCH only what changed: re-sending an unchanged start time of a running
+// event would fail the "must be in the future" check.
+function changes(body, event) {
+  const same = (key) => key.endsWith('_at')
+    ? new Date(body[key]).getTime() === new Date(event[key]).getTime()
+    : body[key] === event[key]
+  return Object.fromEntries(Object.entries(body).filter(([key]) => !same(key)))
+}
+
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
 
 function Input({ label, error, className = '', ...props }) {
@@ -31,10 +57,25 @@ function Input({ label, error, className = '', ...props }) {
 }
 
 function CreateEvent() {
+  const { id } = useParams() // set on /organizer/events/:id/edit
+  const navigate = useNavigate()
   const [form, setForm] = useState(empty)
   const [errors, setErrors] = useState({})
   const [event, setEvent] = useState(null) // saved draft from the API
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    if (!id || String(event?.id) === id) return
+    let active = true
+    api(`/events/${id}`)
+      .then((data) => {
+        if (!active) return
+        setEvent(data)
+        setForm(toForm(data))
+      })
+      .catch((err) => active && setErrors({ form: err.status === 404 ? 'Event not found.' : err.message }))
+    return () => { active = false }
+  }, [id, event?.id])
 
   const update = (e) => setForm({ ...form, [e.target.name]: e.target.value })
   const range = toRange(form)
@@ -52,11 +93,14 @@ function CreateEvent() {
       ...range,
     }
     try {
-      setEvent(
-        event
-          ? await api(`/events/${event.id}`, { method: 'PATCH', body })
-          : await api('/events', { method: 'POST', body }),
-      )
+      if (event) {
+        setEvent(await api(`/events/${event.id}`, { method: 'PATCH', body: changes(body, event) }))
+      } else {
+        const created = await api('/events', { method: 'POST', body })
+        setEvent(created)
+        // A reload now reopens this draft instead of an empty form.
+        navigate(`/organizer/events/${created.id}/edit`, { replace: true })
+      }
     } catch (err) {
       const errs = fieldErrors(err)
       setErrors({
@@ -84,7 +128,7 @@ function CreateEvent() {
   return (
     <main className="mx-auto grid max-w-7xl gap-8 px-6 py-10 md:grid-cols-2 md:divide-x md:divide-gray-300">
       <form onSubmit={saveDraft} className="space-y-4 rounded-lg bg-gray-200 p-6" noValidate>
-        <h2 className="text-2xl">Create Event</h2>
+        <h2 className="text-2xl">{id ? 'Edit Event' : 'Create Event'}</h2>
         <Input label="Event name" name="title" required maxLength={200}
           value={form.title} onChange={update} error={errors.title} />
         <div className="grid grid-cols-3 gap-3">
@@ -160,6 +204,7 @@ function CreateEvent() {
             )}
           </div>
         )}
+        {event && <TicketTypes eventId={event.id} />}
       </section>
     </main>
   )
