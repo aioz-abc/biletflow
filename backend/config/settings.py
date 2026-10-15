@@ -98,5 +98,7 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "BiletFlow Demo <noreply@example.com>"
+# Simulated processing fee in basis points (300 = 3%), withheld from organizer payouts.
+PROCESSING_FEE_BPS = int(os.environ.get("PROCESSING_FEE_BPS", "300"))
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG

@@ -28,6 +28,7 @@ from .models import (
     Ticket,
     TicketType,
 )
+from .notifications import ticket_qr_svg
 from .permissions import CanCheckInEvent, scan_events
 from .serializers import (
     AuditLogSerializer,
@@ -359,9 +360,7 @@ class TicketDetail(generics.RetrieveAPIView):
 class TicketQR(APIView):
     def get(self, request, pk):
         ticket = get_object_or_404(accessible_tickets(request.user), pk=pk)
-        output = BytesIO()
-        qrcode.make(qr_token(ticket), image_factory=SvgPathImage).save(output)
-        response = HttpResponse(output.getvalue(), content_type="image/svg+xml")
+        response = HttpResponse(ticket_qr_svg(qr_token(ticket)), content_type="image/svg+xml")
         response["Cache-Control"] = "private, no-store"
         return response
 
@@ -525,6 +524,12 @@ class CampaignRedirect(APIView):
             f"?{urlencode({'promo_code': code.code})}"
         )
         return HttpResponseRedirect(url)
+
+
+class EventSales(APIView):
+    def get(self, request, pk):
+        event = get_object_or_404(managed_events(request.user), pk=pk)
+        return Response(services.sales_summary(event))
 
 
 class EventAuditLog(generics.ListAPIView):

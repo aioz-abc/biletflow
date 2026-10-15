@@ -80,6 +80,10 @@ def main():
     call("/tickets/check-in", payload, owner)
     call("/tickets/check-in", payload, owner, 409)
     assert not call("/tickets/verify", payload, owner)["valid"]
+    stats = call(f"/events/{event_id}/ticket-types", token=owner)["results"][0]["stats"]
+    assert stats["sold"] == 1 and stats["checked_in"] == 1, stats
+    sales = call(f"/events/{event_id}/sales", token=owner)
+    assert sales["gross_minor"] == 250000 and sales["simulated"], sales
     print(
         json.dumps(
             {
@@ -88,6 +92,8 @@ def main():
                 "order_id": order["id"],
                 "ticket_id": ticket["id"],
                 "total_minor": 250000,
+                "fees_minor": sales["fees_minor"],
+                "estimated_payout_minor": sales["estimated_payout_minor"],
                 "check_in": "checked_in",
                 "duplicate_check_in": "rejected",
             },

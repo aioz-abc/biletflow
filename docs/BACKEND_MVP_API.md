@@ -1,6 +1,6 @@
 # Backend MVP API
 
-Implemented contract, September 24, 2026. This document supersedes the older
+Implemented contract, September 24, 2026; Phase 3 additions October 15, 2026. This document supersedes the older
 Phase 1 API proposal for the MVP routes listed below. Base: `/api`, JSON, no
 trailing slash. Protected requests use `Authorization: Bearer <access>`.
 Money is integer tiyn, currency KZT: `250000` means 2,500 KZT. Dates use ISO 8601
@@ -71,6 +71,7 @@ approved pet-project MVP.
 | PATCH `/ticket-types/{id}` | Owner/admin changes type, including `hidden` |
 | GET `/me/events` | Organizer's events (all events for platform admin) |
 | GET `/events/{id}/attendees` | Owner/admin list of issued tickets and check-in statuses |
+| GET `/events/{id}/sales` | Owner/admin simulated sales summary: gross, discounts, refunds, fees, estimated payout, per-type breakdown |
 | GET/POST `/events/{id}/staff` | Owner/platform admin lists assignments or grants Event Admin to an existing active user by `{email, can_check_in}` |
 | DELETE `/events/{id}/staff/{user_id}` | Owner/platform admin removes an assignment, 204 |
 
@@ -121,7 +122,18 @@ Create ticket type:
 Name and quantity are required; price defaults to zero (free), max_per_order
 to 10, hidden to false. Quantity can be zero; max_per_order is 1–100.
 Responses include event ID and available, limited by both type inventory and
-event capacity. Availability is informational; only reservation guarantees
+event capacity. They also include `stats` (SRS 4.3): for the event owner or a
+platform admin it is an object, for everyone else `null`:
+
+```json
+{"quantity": 5, "available": 2, "reserved": 1, "sold": 2,
+ "checked_in": 1, "refunded": 1, "cancelled": 0}
+```
+
+`reserved` counts tickets in live pending holds; `sold` counts issued tickets
+that are still valid or already checked in (so `checked_in` is a subset of
+`sold`); `refunded` and `cancelled` count invalidated tickets, which no longer
+use inventory. Availability is informational; only reservation guarantees
 inventory. Reducing quantity/capacity below sold + active holds returns 409.
 Price updates do not change existing orders. Hidden types stop new orders;
 already-held tickets may still complete checkout. Sales windows govern new
@@ -170,6 +182,41 @@ amount actually charged. Totals are always recalculated on the server; a
 client-supplied discount is rejected like any other unknown field.
 Preview does not redeem a code or change the order. Checkout validates the code
 again, since its validity and remaining redemption count may change meanwhile.
+
+### Confirmation email (SRS 4.4, 4.7)
+
+Every successful checkout - paid or free - sends one email to the purchaser after
+the database transaction commits: event, date, venue, amount (labelled as a
+simulation), every ticket identifier, a link to the account's tickets, and one
+`ticket-<uuid>.svg` QR attachment per ticket. Failed payments and repeated
+checkout of an already confirmed order send nothing. Local development uses the
+console email backend, so the message appears in `docker compose logs web`.
+
+### Processing fee and sales summary (SRS 4.6)
+
+Each simulated Payment stores `fee_minor`, a platform processing fee of
+`PROCESSING_FEE_BPS` basis points (default 300 = 3%) of the amount paid, rounded
+half up. The attendee pays the order total; the fee is withheld from the
+organizer's estimated payout, so order totals are unchanged. A refunded payment
+returns the full amount to the attendee and its fee is waived. Payments created
+before this change were backfilled by migration 0005 with the same rule.
+
+`GET /events/{id}/sales` (owner or platform admin, otherwise 404):
+
+```json
+{"event": 1, "currency": "KZT", "simulated": true, "processing_fee_bps": 300,
+ "paid_orders": 2, "free_registrations": 0, "refunded_orders": 1,
+ "gross_minor": 30000, "discounts_minor": 0, "refunds_minor": 10000,
+ "fees_minor": 600, "estimated_payout_minor": 19400,
+ "ticket_types": [{"ticket_type": 1, "name": "Standard", "price_minor": 10000,
+   "quantity": 5, "available": 3, "reserved": 0, "sold": 2, "checked_in": 0,
+   "refunded": 1, "cancelled": 0, "sales_before_discount_minor": 20000}]}
+```
+
+`gross_minor` is everything collected by simulated payments (after discounts),
+including later-refunded orders; `estimated_payout_minor = gross - refunds -
+fees`. `simulated: true` is always present; the UI must label these numbers as
+demonstration data, never as real transactions.
 
 ## Cancellations and refunds
 
@@ -292,11 +339,20 @@ Authenticated clients must not cache/share private ticket or token responses.
 docker compose up --build -d --wait
 docker compose exec -T web python manage.py test --noinput
 docker compose exec -T web python demo_mvp.py
+docker compose exec -T web python manage.py seed_demo
 ```
+
+`seed_demo` loads repeatable demo data for the whole team: an organizer,
+an attendee with tickets, an Event Admin for check-in and a platform admin
+(all `@biletflow.local`, password `Demo-pass-2026!`, printed by the command),
+three events (paid with two tiers, free, unlisted), promo code `DEMO10` and
+two confirmed orders created through the real reserve/checkout services.
+Running it again creates nothing new. Outside DEBUG it requires `--password`.
 
 The demo makes real HTTP requests, creates two fresh accounts and a published
 event, purchases a ticket, verifies it, checks it in and confirms duplicate
-check-in is rejected. It leaves those demo records in the local database.
+check-in is rejected, then reads the organizer's ticket-type stats and sales
+summary. It leaves those demo records in the local database.
 It prints record IDs, never credentials. Run `python backend/demo_mvp.py`
 from the host too (Python 3.11+); `--base-url` selects another local API port.
 
