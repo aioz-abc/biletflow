@@ -1,6 +1,6 @@
 # Backend MVP API
 
-Implemented contract, September 24, 2026; Phase 3 additions October 15, 2026. This document supersedes the older
+Implemented contract, September 24, 2026; Phase 3 additions and support cases October 15, 2026. This document supersedes the older
 Phase 1 API proposal for the MVP routes listed below. Base: `/api`, JSON, no
 trailing slash. Protected requests use `Authorization: Bearer <access>`.
 Money is integer tiyn, currency KZT: `250000` means 2,500 KZT. Dates use ISO 8601
@@ -72,7 +72,7 @@ approved pet-project MVP.
 | GET `/me/events` | Organizer's events (all events for platform admin) |
 | GET `/events/{id}/attendees` | Owner/admin list of issued tickets and check-in statuses |
 | GET `/events/{id}/sales` | Owner/admin simulated sales summary: gross, discounts, refunds, fees, estimated payout, per-type breakdown |
-| GET/POST `/events/{id}/staff` | Owner/platform admin lists assignments or grants Event Admin to an existing active user by `{email, can_check_in}` |
+| GET/POST `/events/{id}/staff` | Owner/platform admin lists assignments or grants Event Admin to an existing active user by `{email, can_check_in, can_manage_support}` (support defaults to false) |
 | DELETE `/events/{id}/staff/{user_id}` | Owner/platform admin removes an assignment, 204 |
 
 Create event:
@@ -324,6 +324,41 @@ event stops sales but does not cancel already-issued tickets. Verification is
 read-only; check-in rejects a repeated scan with 409 and records operator/time.
 There is no check-in time window in the MVP; authorized staff may test
 admission before the event. Individual holder details and undo are deferred.
+
+## Support cases
+
+| Method and path | Behavior |
+| --- | --- |
+| POST `/support-cases` | Open a case: `{category, subject, message, event?, order?, ticket?}` → 201 with the case and its first message |
+| GET `/support-cases` | Inbox of cases the caller can see, newest activity first; filters `?status=`, `?kind=`, `?event=`, `?assigned=me\|none` |
+| GET `/support-cases/{id}` | Case plus full `messages` thread |
+| PATCH `/support-cases/{id}` | Support side only: `{status?, assigned_to?}`; `assigned_to: null` unassigns |
+| GET `/support-cases/{id}/messages` | Thread, unpaginated; `?after=<message id>` returns only newer messages for polling |
+| POST `/support-cases/{id}/messages` | Requester or support side posts `{body}` → 201 |
+
+Context: send the most specific link the page has. A ticket fills in its order
+and event, and an order fills in its event; links that disagree return 400.
+Tickets and orders must belong to the caller (404 otherwise); an event alone
+must be visible to the caller. A case with an event is an `attendee` case.
+A case with no context is a `platform` case and is only allowed for organizers.
+
+Categories: attendee cases use ticket_delivery, payment, refund, seating,
+event_information, check_in, account or technical. Platform cases use account,
+activation, payment or technical. Statuses: open, in_progress,
+waiting_for_customer, resolved.
+
+Access (SRS 4.13): the requester always sees their own case. The support side of
+an attendee case is the event owner, Event Admins assigned with
+`can_manage_support`, and platform admins. Platform cases are shared only with
+platform admins. Anyone else gets 404. Only the support side may PATCH (403 for
+the requester). Cases can only be assigned to someone on the support side.
+
+Behavior: a requester reply to a `waiting_for_customer` case moves it to
+`in_progress`. A resolved case rejects new messages with 409; the attendee opens
+a new case. Opening, assignment and status changes on attendee cases are written
+to the event audit log. New replies, assignment and status changes send an
+email (console in development) linking to `{FRONTEND_BASE_URL}/support/{id}`.
+Clients refresh by polling the messages endpoint; there are no websockets.
 
 ## Errors and pagination
 
