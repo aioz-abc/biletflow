@@ -75,9 +75,9 @@ export default function AdminPortal() {
     finally { operation.current = false; setBusy(false); setSection('overview') }
   }
 
-  return <div className="mw"><aside><a className="mw-brand" href="/">biletflow<span>PLATFORM ADMIN / PHASE 02</span></a>
+  return <div className="mw"><aside><a className="mw-brand" href="/">biletflow<span>PLATFORM ADMIN</span></a>
     {session.user && <nav aria-label="Управление платформой">{Object.entries(sections).map(([key, label]) => <button key={key} type="button" aria-current={section === key ? 'page' : undefined} onClick={() => setSection(key)}>{label}</button>)}</nav>}
-    <p>Мират · Admin & Analytics<br />Этап 2 / 15–28 сентября</p></aside>
+    </aside>
     <main><header><p className="mw-eyebrow">BILETFLOW · УПРАВЛЕНИЕ</p><h1>{session.user ? sections[section] : 'Вход администратора'}</h1></header>
       {error && <p className="mw-notice" role="alert">{error}</p>}
       {session.loading ? <p role="status">Проверяем сессию…</p> : session.user ? <>
