@@ -38,8 +38,19 @@ your piece a little ahead of whoever needs it next.
 
 ## Phase 3 (Sep 29–Oct 12) — Tickets, orders, checkout support 📍 Report 3 (Oct 12)
 
-- Review/merge Aizhan's ticket-type, inventory, and order/checkout PRs;
-  keep `API_CONTRACT.md` current.
+> **Ownership changed.** Nursat implemented the ticket-type, inventory,
+> order and checkout work himself as part of the backend ticketing MVP
+> (commit `489e07c`), rather than reviewing Aizhan's PRs for it. The review
+> workload for this phase has shifted to Aizhan's Phase 2 and Phase 4
+> branches instead.
+
+- ✅ Ticket types, inventory holds, orders, simulated checkout and QR
+  issuance implemented directly (SRS 4.3–4.7).
+- Review and merge Aizhan's two open branches — `aizhan/event-visibility-duplicate`
+  and `aizhan/phase4-refunds-promo`, the second stacked on the first. The
+  Phase 4 branch carries open design decisions on refund and promo behaviour
+  that need an explicit call.
+- Keep `API_CONTRACT.md` current.
 - Pair-review the seat-reservation/atomic-checkout logic carefully — the
   SRS explicitly requires no double-selling a seat under concurrent
   checkout, which is the trickiest correctness requirement in the project.
@@ -56,10 +67,10 @@ your piece a little ahead of whoever needs it next.
 
 ## Phase 5 (Oct 27–Nov 9) — Integration 📍 Report 5 (Nov 9)
 
-- This is your heaviest week: connect backend ↔ web ↔ admin ↔ mobile,
+- This is your heaviest week: connect backend ↔ frontend ↔ mobile,
   resolve cross-service bugs, and confirm a fresh `git clone` +
   `docker compose up` gives a working demo end to end.
-- Support Mirat's remaining admin/analytics endpoints.
+- Support Mirat's remaining admin/analytics endpoints used by `frontend/`.
 
 ## Phase 6 (Nov 10–16) — Stabilize 📍 Final (Nov 16)
 

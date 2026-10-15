@@ -1,10 +1,52 @@
-# BiletFlow — API Contract (Draft)
+# BiletFlow — API Contract v1 (Draft)
+
+> Historical Phase 1 proposal. Implemented MVP routes, payloads and deliberate
+> differences are documented in [BACKEND_MVP_API.md](BACKEND_MVP_API.md).
+> Use that contract for frontend integration; statuses below describe the old draft.
 
 Owner: Nursat (Backend/Architecture Lead). Update this as endpoints are
 built or change — this is the shared source of truth so Web, Admin, and
 Mobile can build against it without waiting on backend implementation.
 
 Status legend: `planned` → `stubbed` (returns fake data) → `done`
+
+Phase 1: only the health endpoint is implemented. Auth below is a concrete
+proposal for Phase 2; other domain sections remain the team's endpoint
+inventory. Review auth with Nursat/Aizhan and the client developers before
+parallel implementation. `planned` routes currently return 404, not mock data.
+
+## Shared conventions
+
+- Local base URL: `http://localhost:8000/api`. Tables below omit `/api`.
+- API paths have no trailing slash. Requests/responses use JSON and UTF-8.
+- Use `Content-Type: application/json` on requests with JSON bodies.
+- IDs are positive integers; timestamps are ISO 8601 with a timezone,
+  normally UTC (`2026-09-14T09:00:00Z`). Date fields use `YYYY-MM-DD`.
+- Monetary fields use integer tiyn, indicated by `_minor`; 2,500 KZT is
+  `250000`. Currency is `KZT`. Values are server-calculated simulations.
+- Proposed list shape: `{"count": 1, "next": null, "previous": null, "results": []}`,
+  with `?page=1`, default 20 records/page. List pagination is not implemented yet.
+- Planned validation errors follow DRF's field mapping:
+  `{"email": ["Enter a valid email address."]}` or
+  `{"non_field_errors": ["The request is inconsistent."]}`.
+  Other errors use `{"detail": "..."}`. Clients branch on HTTP status and
+  field keys, not translated message text.
+- Common statuses: 400 invalid input, 401 missing/invalid authentication,
+  403 authenticated but forbidden, 404 missing or inaccessible resource,
+  409 business-state conflict, 429 throttled, 503 temporarily unavailable.
+  Not all of these are implemented by the Phase 1 health endpoint.
+- Never accept a client's prices, discounts, staff flags or verification
+  status as authoritative. Object access must check event ownership or a
+  StaffAssignment, not just a role name.
+
+## Health (implemented)
+
+`GET /health` — public, no credentials required.
+
+- 200: `{"status": "ok", "database": "ok"}`
+- 503 on database connection/query failure:
+  `{"status": "unavailable", "database": "unavailable"}`
+- No database connection details or exception messages are returned.
 
 ## Auth
 
@@ -13,9 +55,145 @@ Status legend: `planned` → `stubbed` (returns fake data) → `done`
 | POST | /auth/register | Register with email | planned |
 | POST | /auth/verify-email | Verify email address | planned |
 | POST | /auth/login | Sign in | planned |
+| POST | /auth/refresh | Rotate refresh and issue access token | planned |
 | POST | /auth/logout | Sign out | planned |
 | POST | /auth/reset-password | Request password reset | planned |
+| POST | /auth/reset-password/confirm | Confirm password reset | planned |
 | GET | /auth/me | Current user + role | planned |
+
+### Authentication and account payload
+
+Proposed JWT scheme: send `Authorization: Bearer <access>` for protected API
+requests. Access lifetime 15 minutes; refresh lifetime 7 days. Refresh tokens
+rotate and old refresh tokens are blacklisted. Access tokens are not revoked
+instantly on logout; they expire after at most 15 minutes. Login/refresh and
+protected endpoints check live `is_active`. Password reset must invalidate
+existing sessions/tokens; Phase 2 must choose and test the revocation mechanism.
+Role changes must take effect from database state, not stale JWT role claims.
+Django admin uses a separate session + CSRF and is not this JWT API.
+
+Public auth operations require throttling in Phase 2. Verification/reset
+messages contain short-lived, single-use credentials and are sent through
+email (console email in local development); tokens must not be returned in
+normal API responses or logged by request-body logging. Proposed expiry:
+verification 24 hours, password reset 1 hour. Reissuing invalidates the old token.
+
+The common user response is:
+
+```json
+{
+  "id": 1,
+  "email": "nursat@example.com",
+  "first_name": "Nursat",
+  "last_name": "",
+  "email_verified": false,
+  "roles": ["attendee", "organizer"],
+  "organizer_profile": {
+    "id": 1,
+    "display_name": "Student Events",
+    "contact_email": "events@example.com",
+    "contact_phone": ""
+  }
+}
+```
+
+`organizer_profile` is null for an attendee without a profile. `roles` is an
+array because capabilities overlap: attendee, organizer, event_admin,
+platform_admin. Event Admin is derived from event assignments; it never
+grants access to every event. Payout references and password hashes are
+excluded from this common response. `email_verified` derives from the
+User.email_verified_at timestamp.
+
+### POST /auth/register
+
+Public request:
+
+```json
+{
+  "email": "nursat@example.com",
+  "password": "a-strong-example-password",
+  "first_name": "Nursat",
+  "last_name": "",
+  "account_type": "organizer",
+  "organizer_profile": {
+    "display_name": "Student Events",
+    "contact_email": "events@example.com",
+    "contact_phone": ""
+  }
+}
+```
+
+- Required: email and password. Optional names default to empty strings;
+  account_type defaults to `attendee` and accepts only attendee/organizer.
+- Organizer registration requires display_name and contact_email in
+  organizer_profile. Attendee registration must omit organizer_profile.
+- Email is trimmed and lowercased; case variants cannot create duplicates.
+  Validate passwords using Django validators (minimum 8 characters plus
+  similarity/common/numeric checks); never store plaintext passwords.
+- Create user/profile atomically; queue verification only after commit.
+- 201: `{"user": <common user>, "detail": "Verification email sent."}`.
+  No login tokens until the explicit login operation.
+- 400: invalid email/password, duplicate email, inconsistent profile, or
+  privilege/unknown fields such as `is_superuser`, `roles`, `email_verified`.
+
+### POST /auth/verify-email
+
+- Public input: `{"uid": "<encoded-user-id>", "token": "<email-token>"}`.
+- 200: `{"detail": "Email verified."}`; record email_verified_at.
+- 400: malformed, expired, invalid or already-used credentials, with the
+  same generic message. Use a verification-specific token purpose so reset
+  credentials cannot verify email or vice versa.
+
+### POST /auth/login
+
+- Public input: `{"email": "nursat@example.com", "password": "..."}`.
+- 200: `{"access": "<jwt>", "refresh": "<jwt>", "user": <common user>}`.
+- 401: same generic invalid-credentials message for unknown email,
+  wrong password or suspended account.
+- Unverified active accounts may log in to their account; publishing an
+  event requires verified email. No client may bypass this server-side rule.
+
+### POST /auth/refresh
+
+- Public bearer-auth exemption; the supplied refresh token is the credential.
+- Input: `{"refresh": "<refresh-jwt>"}`.
+- 200: `{"access": "<new-access>", "refresh": "<new-refresh>"}`.
+- 400 for malformed input; 401 for expired/revoked tokens or inactive user.
+  A rotated refresh token must not be reusable.
+
+### POST /auth/logout
+
+- Input: `{"refresh": "<refresh-jwt>"}`. The refresh token itself is the
+  credential; access need not still be valid. Revoke only that login's refresh.
+- 204 with no body after revocation, including repeat revocation of a valid
+  signed token. Malformed body: 400; invalid signature/token type: 401.
+- Clients clear credentials immediately, and never persist browser tokens
+  in localStorage by default. Agree browser memory/session persistence and
+  secure mobile storage with the client owners during Phase 2 integration.
+
+### POST /auth/reset-password
+
+- Public input: `{"email": "nursat@example.com"}`.
+- 200: `{"detail": "If the account exists, a reset email has been sent."}`
+  for both known and unknown addresses. Send only to eligible active users;
+  keep the same response for suspended accounts.
+- 400 for syntactically invalid email. Prevent account enumeration through
+  response differences and rate-limit repeated requests.
+
+### POST /auth/reset-password/confirm
+
+- Public input:
+  `{"uid": "<encoded-user-id>", "token": "<reset-token>", "new_password": "..."}`.
+- 200: `{"detail": "Password reset. Sign in again."}`.
+- 400: expired/used/invalid token or invalid new password.
+- Change the hash, consume the credential, revoke existing authentication,
+  and require fresh login. Do not automatically verify the email or log in.
+
+### GET /auth/me
+
+- Requires a valid access token and active account.
+- 200: the common user object directly (no `user` wrapper).
+- 401 for missing, invalid, expired authentication or suspended account.
 
 ## Events
 
@@ -67,6 +245,41 @@ Status legend: `planned` → `stubbed` (returns fake data) → `done`
 
 ## Promo Codes & Campaigns
 
+### Mirat Phase 1 draft — September 14, 2026
+
+The following payloads are proposed, not implemented. Review with Nursat
+and Aizhan before connecting the frontend. The Phase 1 wireframes use local
+fixtures and make no API requests. Implemented ticketing/auth remains
+documented in `BACKEND_MVP_API.md`.
+
+Access: event owner or Platform Admin; check ownership on every operation.
+`POST /events/:id/campaigns` request example:
+
+```json
+{"name":"Student offer","discount_type":"percent","discount_value":20,"starts_at":"2026-09-14T09:00:00Z","ends_at":"2026-09-25T09:00:00Z","max_redemptions":100,"ticket_type_ids":[1]}
+```
+
+For `percent`, `discount_value` is an integer 1–100; for `fixed`, it is
+positive integer tiyn (the UI converts KZT to tiyn). Dates must be ordered,
+redemption limit positive, and ticket types must belong to the event. Empty
+`ticket_type_ids` means all event ticket types. UI local date/time inputs must
+be converted from the event timezone to offset-aware ISO timestamps.
+
+Proposed 201 response:
+
+```json
+{"id":1,"event":1,"name":"Student offer","code":"STUDENT-DEMO","discount_type":"percent","discount_value":20,"starts_at":"2026-09-14T09:00:00Z","ends_at":"2026-09-25T09:00:00Z","max_redemptions":100,"ticket_type_ids":[1],"redemptions":0,"active":true,"campaign_url":"https://example.com/events/1?campaign=opaque-token"}
+```
+
+Campaign links and codes are generated by the server. List results use the
+shared paginated envelope. Applying a code accepts `{"order_id":1}` and
+returns `{"order_id":1,"subtotal_minor":500000,"discount_minor":100000,"total_minor":400000,"currency":"KZT"}`.
+Only the purchaser may apply a code to their pending order. The server validates
+eligibility, computes totals, caps discounts at the subtotal, and enforces
+redemption limits atomically at checkout; preview does not consume a redemption.
+Reject invalid/expired codes with 400 and conflicting order/inventory state
+with 409. Campaign QR is not an admission ticket.
+
 | Method | Endpoint | Description | Status |
 |--------|----------|--------------|--------|
 | POST | /events/:id/campaigns | Create promo campaign | planned |
@@ -75,15 +288,68 @@ Status legend: `planned` → `stubbed` (returns fake data) → `done`
 
 ## Admin
 
+Phase 1 proposal: Platform Admin only (current auth represents this as
+`is_superuser`, exposed as `platform_admin`). Frontend role checks only control
+navigation; backend permissions remain mandatory. Use existing `/auth/login`
+and `/auth/me` in Phase 2; do not create separate credentials or token storage.
+The Django `/admin/` interface on port 8000 is separate from the frontend route.
+
+Search endpoints accept `?search=...&page=1`, returning the shared envelope:
+
+- `/admin/users`: rows `{id, email, first_name, last_name, roles, is_active}`.
+- `/admin/events`: rows `{id, title, organizer_id, starts_at, published, suspended}`.
+- `/admin/orders`: rows `{id, event_id, purchaser_id, status, total_minor, currency, created_at}`.
+
+Search covers user name/email, event title, or order ID; empty query lists
+accessible records. No results returns HTTP 200 with an empty `results`.
+Passwords, token material, and payout details must never appear in search results.
+Planned suspend operations accept `{"reason":"Moderation reason"}`, return
+the updated record, and create an audit entry. Activation/report payloads are
+deferred to later phases. Return 401 without authentication and 403 for a
+non-admin caller.
+
 | Method | Endpoint | Description | Status |
 |--------|----------|--------------|--------|
 | GET | /admin/users | Search users | planned |
 | GET | /admin/events | Search/moderate events | planned |
+| GET | /admin/orders | Search orders | planned |
+| POST | /admin/users/:id/suspend | Suspend user | planned |
 | POST | /admin/events/:id/suspend | Suspend event | planned |
 | GET | /admin/activations | Review activation requests | planned |
 | GET | /admin/reports | Operational reports export | planned |
 
 ## Analytics
+
+Phase 1 proposal: event owner or Platform Admin. Query parameters are
+`from` and `to` (ISO timestamps; inclusive start, exclusive end) and optional
+`ticket_type_id`. Reject inverted dates and ticket types from other events.
+Group daily sales in the event timezone, using confirmed orders and
+authoritative refund/check-in records. Example response:
+
+```json
+{"event_id":1,"currency":"KZT","timezone":"Asia/Almaty","from":"2026-09-08T00:00:00+05:00","to":"2026-09-15T00:00:00+05:00","capacity":200,"sold":120,"held":0,"remaining":80,"gross_sales_minor":60000000,"refunds_minor":0,"net_sales_minor":60000000,"checked_in":0,"attendance_percent":0,"sales_by_day":[{"date":"2026-09-08","tickets":20,"gross_sales_minor":10000000}],"sales_by_ticket_type":[{"ticket_type_id":1,"sold":100,"gross_sales_minor":45000000},{"ticket_type_id":2,"sold":20,"gross_sales_minor":15000000}],"campaigns":[{"campaign_id":1,"redemptions":12,"tickets":12,"revenue_minor":4800000}]}
+```
+
+The daily array above is abbreviated. Sales/refunds/campaign totals use the
+selected period; inventory and attendance are current snapshots, labelled as
+such by the UI. `remaining` excludes live holds and sold inventory. Attendance
+uses issued, non-cancelled/non-refunded tickets; zero denominator returns 0.
+Empty periods return zero sales totals and empty series, not invented data.
+Campaign revenue is a subset of total revenue. No GA4 dependency for Phase 1.
+
+### Organizer event history and audit — draft
+
+- `GET /me/event-history?status=upcoming&page=1`: paginated event rows
+  `{id, title, starts_at, ends_at, status}`. Status values: `upcoming`, `active`,
+  `completed`, `cancelled`; cancellation takes precedence over date-derived status.
+- `GET /events/:id/history?from=...&to=...&action=publish&page=1`:
+  paginated rows `{id, timestamp, actor:{id, display_name}, action, entity_type,
+  entity_id, description}`, newest first (ID breaks timestamp ties).
+
+Both are planned. Scope to the event owner or Platform Admin; audit is
+read-only. Actions cover publication, capacity/price changes, refunds,
+campaign changes and check-in. Use an empty list for no history. Returning
+the event list alone is not an audit implementation.
 
 | Method | Endpoint | Description | Status |
 |--------|----------|--------------|--------|
@@ -102,6 +368,8 @@ Status legend: `planned` → `stubbed` (returns fake data) → `done`
 
 - Until an endpoint is `stubbed` or `done`, build your UI against this
   shape and mock the response locally.
-- Auth uses [session/JWT — Nursat to confirm] passed as `Authorization: Bearer <token>`.
+- Phase 2 auth uses the JWT proposal above; it is not available in Phase 1.
 - All money amounts are simulated per the SRS (no real payment provider in
-  the academic MVP) — represent them in KZT as integers (smallest unit TBD).
+  the academic MVP) — use integer tiyn with currency `KZT` as defined above.
+- For request/response shapes outside Auth, coordinate with the feature
+  owner; an endpoint row alone is not a complete payload contract.
