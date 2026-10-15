@@ -73,6 +73,7 @@ class TicketTypeSerializer(StrictModelSerializer):
     quantity = serializers.IntegerField(min_value=0, max_value=1000000)
     max_per_order = serializers.IntegerField(min_value=1, max_value=100, required=False)
     available = serializers.SerializerMethodField()
+    stats = serializers.SerializerMethodField()
 
     class Meta:
         model = TicketType
@@ -87,8 +88,21 @@ class TicketTypeSerializer(StrictModelSerializer):
             "sales_end",
             "hidden",
             "available",
+            "stats",
         ]
-        read_only_fields = ["id", "event", "available"]
+        read_only_fields = ["id", "event", "available", "stats"]
+
+    def get_stats(self, obj):
+        # Sales counts are organizer data: attendees and anonymous visitors get null.
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return None
+        if not (user.is_superuser or obj.event.organizer.user_id == user.pk):
+            return None
+        from .services import ticket_type_stats
+
+        return ticket_type_stats(obj)
 
     def get_available(self, obj):
         from .services import reserved

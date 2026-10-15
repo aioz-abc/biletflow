@@ -5,12 +5,13 @@ from uuid import UUID
 from django.conf import settings
 from django.core import signing
 from django.db import transaction
-from django.db.models import Q, Sum
+from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
 from rest_framework.exceptions import APIException, NotFound, ValidationError
 
+from . import notifications
 from .models import (
     AuditLog,
     Event,
@@ -93,6 +94,15 @@ def reserve(user, event_id, items):
     return order
 
 
+def processing_fee(amount_minor):
+    """Simulated platform processing charge withheld from the organizer payout.
+
+    The attendee pays the ticket total; the fee is reported to the organizer in the
+    sales summary (SRS 4.6). Rounded half up to a whole tiyn.
+    """
+    return (amount_minor * settings.PROCESSING_FEE_BPS + 5000) // 10000
+
+
 def ensure_checkout_available(user, event, order):
     if order.status != "pending" or order.expires_at <= timezone.now():
         raise Conflict("Order is cancelled or expired.")
@@ -152,13 +162,20 @@ def checkout(user, order_id, outcome, promo_code=None):
         redemption.save()
         record_audit(event, user, "promo.redeemed", redemption)
     if order.total_minor:
-        payment = Payment.objects.create(order=order, amount_minor=order.total_minor)
+        payment = Payment.objects.create(
+            order=order,
+            amount_minor=order.total_minor,
+            fee_minor=processing_fee(order.total_minor),
+        )
         record_audit(event, user, "payment.completed", payment, f"{payment.amount_minor} tiyn.")
     Ticket.objects.bulk_create(
         [Ticket(order_item=item) for item in order.items.all() for _ in range(item.quantity)]
     )
     order.status = "confirmed"
     order.confirmed_at = timezone.now()
+    # Email only after the transaction commits, so a rolled-back checkout never
+    # tells the attendee they have a ticket (SRS 4.6: failed checkouts issue nothing).
+    transaction.on_commit(lambda: notifications.send_order_confirmation(order.pk))
     order.save(
         update_fields=[
             "status",
@@ -386,3 +403,80 @@ def campaign_active(campaign):
             or campaign.redemptions.count() < campaign.max_redemptions
         )
     )
+
+
+def ticket_type_stats(kind):
+    """Inventory breakdown for one ticket type (SRS 4.3), as seen by its organizer."""
+    tickets = Ticket.objects.filter(order_item__ticket_type=kind).aggregate(
+        valid=Count("pk", filter=Q(status="valid")),
+        checked_in=Count("pk", filter=Q(status="checked_in")),
+        refunded=Count("pk", filter=Q(status="refunded")),
+        cancelled=Count("pk", filter=Q(status="cancelled")),
+    )
+    held = (
+        OrderItem.objects.filter(
+            ticket_type=kind, order__status="pending", order__expires_at__gt=timezone.now()
+        ).aggregate(total=Sum("quantity"))["total"]
+        or 0
+    )
+    sold = tickets["valid"] + tickets["checked_in"]
+    return {
+        "quantity": kind.quantity,
+        "available": max(
+            0,
+            min(kind.quantity - held - sold, kind.event.capacity - reserved(kind.event_id)),
+        ),
+        "reserved": held,
+        "sold": sold,
+        "checked_in": tickets["checked_in"],
+        "refunded": tickets["refunded"],
+        "cancelled": tickets["cancelled"],
+    }
+
+
+def sales_summary(event):
+    """Organizer sales report for one event (SRS 4.6). All money is simulated."""
+    payments = Payment.objects.filter(order__event=event).select_related("order")
+    refunded = Refund.objects.filter(payment__order__event=event)
+    totals = payments.aggregate(
+        gross=Sum("amount_minor"),
+        discounts=Sum("order__discount_minor"),
+        fees=Sum("fee_minor", filter=Q(refund__isnull=True)),
+        count=Count("pk"),
+    )
+    refunds_minor = refunded.aggregate(total=Sum("amount_minor"))["total"] or 0
+    gross = totals["gross"] or 0
+    fees = totals["fees"] or 0
+    by_type = []
+    for kind in event.ticket_types.all():
+        stats = ticket_type_stats(kind)
+        revenue = (
+            OrderItem.objects.filter(ticket_type=kind, order__status="confirmed").aggregate(
+                total=Sum(F("unit_price_minor") * F("quantity"))
+            )["total"]
+            or 0
+        )
+        by_type.append(
+            {
+                "ticket_type": kind.pk,
+                "name": kind.name,
+                "price_minor": kind.price_minor,
+                **stats,
+                "sales_before_discount_minor": revenue,
+            }
+        )
+    return {
+        "event": event.pk,
+        "currency": "KZT",
+        "simulated": True,
+        "processing_fee_bps": settings.PROCESSING_FEE_BPS,
+        "paid_orders": totals["count"],
+        "free_registrations": event.orders.filter(status="confirmed", total_minor=0).count(),
+        "refunded_orders": refunded.count(),
+        "gross_minor": gross,
+        "discounts_minor": totals["discounts"] or 0,
+        "refunds_minor": refunds_minor,
+        "fees_minor": fees,
+        "estimated_payout_minor": gross - refunds_minor - fees,
+        "ticket_types": by_type,
+    }

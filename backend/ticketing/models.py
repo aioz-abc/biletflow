@@ -107,6 +107,8 @@ class OrderItem(models.Model):
 class Payment(models.Model):
     order = models.OneToOneField(Order, on_delete=models.PROTECT, related_name="payment")
     amount_minor = models.PositiveBigIntegerField()
+    # Simulated processing charge withheld from the organizer payout (SRS 4.6).
+    fee_minor = models.PositiveBigIntegerField(default=0)
     simulation_reference = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
