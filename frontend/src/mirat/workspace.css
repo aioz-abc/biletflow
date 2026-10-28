@@ -43,3 +43,10 @@
 .mw nav button { text-align: left; }
 .mw nav button[aria-current] { background: #486d59; }
 .mw-account { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; overflow-wrap: anywhere; }
+
+.mw-fields { border: 0; padding: 0; min-width: 0; }
+.mw-ticket-options { border: 1px solid #dce1d8; border-radius: 8px; padding: 14px; margin-bottom: 20px; }
+.mw .mw-checkbox { display: flex; align-items: center; gap: 10px; }
+.mw .mw-checkbox input { width: auto; }
+.mw .mw-secondary { margin: 10px; background: #edf0eb; color: #214e3e; }
+.mw-success { border-left: 4px solid #397352; }
