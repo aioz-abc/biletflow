@@ -1,73 +1,95 @@
-import EventPage from './EventPage.jsx'
+import { Routes, Route, Link, useLocation } from "react-router-dom";
+import { useAuth } from "./auth/auth";
+import RequireAuth from "./auth/RequireAuth.jsx";
+import RequireOrganizer from "./auth/RequireOrganizer.jsx";
+import Account from "./pages/Account.jsx";
+import Checkout from "./pages/Checkout.jsx";
+import Home from "./pages/Home.jsx";
+import Login from "./pages/Login.jsx";
+import Register from "./pages/Register.jsx";
+import CreateEvent from "./pages/CreateEvent.jsx";
+import EventDetail from "./pages/EventDetail.jsx";
+import MyEvents from "./pages/MyEvents.jsx";
+import Ticket from "./pages/Ticket.jsx";
 
 function App() {
-  const eventId = window.location.pathname.match(/^\/events\/(\d+)\/?$/)?.[1]
-  if (eventId) return <EventPage eventId={eventId} />
+  const { user, isOrganizer, logout } = useAuth();
+  const location = useLocation();
+  // Login/Register are modals: keep Home rendered underneath them
+  const isAuthModal = ["/login", "/register"].includes(location.pathname);
 
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
-          <h1 className="text-2xl font-bold">Biletflow</h1>
+          <Link to="/" className="text-2xl font-bold">Begemot.com</Link>
 
-          <nav className="flex gap-6">
-            <a href="#" className="text-gray-600 hover:text-black">
+          <nav className="flex items-center gap-6">
+            <Link to="/" className="text-gray-600 hover:text-black">
               Events
-            </a>
-            <a href="#" className="text-gray-600 hover:text-black">
-              Create Event
-            </a>
-            <a href="#" className="text-gray-600 hover:text-black">
-              Login
-            </a>
+            </Link>
+
+            {!user && (
+              <Link to="/organizer/events/new" className="text-gray-600 hover:text-black">
+                Create Event
+              </Link>
+            )}
+
+            {isOrganizer && (
+              <Link to="/organizer/events" className="text-gray-600 hover:text-black">
+                My Events
+              </Link>
+            )}
+
+            {user ? (
+              <>
+                <Link to="/account" className="text-gray-600 hover:text-black">
+                  My Tickets
+                </Link>
+                <span className="text-gray-600">{user.first_name || user.email}</span>
+                <button onClick={logout} className="text-gray-600 hover:text-black">
+                  Logout
+                </button>
+              </>
+            ) : (
+              <Link to="/login" className="text-gray-600 hover:text-black">
+                Login
+              </Link>
+            )}
           </nav>
         </div>
       </header>
 
-      <main>
-        <section className="mx-auto max-w-7xl px-6 py-20">
-          <h2 className="max-w-3xl text-5xl font-bold tracking-tight">
-            Discover events in Kazakhstan
-          </h2>
-
-          <p className="mt-6 max-w-2xl text-lg text-gray-600">
-            Find events, get your digital tickets, and enjoy your experience.
-          </p>
-
-          <div className="mt-8 flex gap-4">
-            <button className="rounded-lg bg-black px-6 py-3 font-medium text-white">
-              Explore events
-            </button>
-
-            <button className="rounded-lg border border-gray-300 bg-white px-6 py-3 font-medium">
-              Create an event
-            </button>
-          </div>
-        </section>
-
-        <section className="mx-auto max-w-7xl px-6 pb-20">
-          <h3 className="text-2xl font-semibold">Upcoming events</h3>
-
-          <div className="mt-6 grid gap-6 md:grid-cols-3">
-            <div className="rounded-xl border bg-white p-6">
-              <h4 className="text-xl font-semibold">Event name</h4>
-              <p className="mt-2 text-gray-600">Astana · September 20</p>
-            </div>
-
-            <div className="rounded-xl border bg-white p-6">
-              <h4 className="text-xl font-semibold">Event name</h4>
-              <p className="mt-2 text-gray-600">Almaty · September 25</p>
-            </div>
-
-            <div className="rounded-xl border bg-white p-6">
-              <h4 className="text-xl font-semibold">Event name</h4>
-              <p className="mt-2 text-gray-600">Astana · October 2</p>
-            </div>
-          </div>
-        </section>
-      </main>
+      {isAuthModal && <Home />}
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route path="/events/:id" element={<EventDetail />} />
+        <Route path="/checkout/:orderId" element={<RequireAuth><Checkout /></RequireAuth>} />
+        <Route path="/tickets/:id" element={<RequireAuth><Ticket /></RequireAuth>} />
+        <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+        <Route path="/organizer/events" element={<RequireOrganizer><MyEvents /></RequireOrganizer>} />
+        {/* Keys: leaving an edit page for "new" must start from an empty form */}
+        <Route
+          path="/organizer/events/new"
+          element={
+            <RequireOrganizer>
+              <CreateEvent key="new" />
+            </RequireOrganizer>
+          }
+        />
+        <Route
+          path="/organizer/events/:id/edit"
+          element={
+            <RequireOrganizer>
+              <CreateEvent key="edit" />
+            </RequireOrganizer>
+          }
+        />
+      </Routes>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
