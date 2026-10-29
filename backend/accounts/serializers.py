@@ -131,6 +131,22 @@ class ActiveRefreshSerializer(TokenRefreshSerializer):
         return super().validate(attrs)
 
 
+class SuspendSerializer(StrictSerializer):
+    suspended = serializers.BooleanField()
+    reason = serializers.CharField(max_length=300, required=False, allow_blank=True, default="")
+
+
+class AdminUserSerializer(serializers.ModelSerializer):
+    roles = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["id", "email", "first_name", "last_name", "is_active", "date_joined", "roles"]
+
+    def get_roles(self, user):
+        return user_payload(user)["roles"]
+
+
 class LogoutSerializer(StrictSerializer):
     refresh = serializers.CharField()
 

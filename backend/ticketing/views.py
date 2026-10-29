@@ -16,6 +16,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import OrganizerProfile, User
+from accounts.permissions import IsPlatformAdmin
+from accounts.serializers import SuspendSerializer
 
 from . import services
 from .models import (
@@ -58,7 +60,10 @@ def visible_events(user):
     # link; unlisted events are reachable by ID/QR but excluded from the public
     # listing (see EventList.get_queryset).
     public = Q(
-        published=True, organizer__user__is_active=True, visibility__in=["public", "unlisted"]
+        published=True,
+        suspended_at__isnull=True,
+        organizer__user__is_active=True,
+        visibility__in=["public", "unlisted"],
     )
     if user.is_authenticated:
         if user.is_superuser:
@@ -73,7 +78,10 @@ class EventList(generics.ListCreateAPIView):
 
     def get_queryset(self):
         return Event.objects.filter(
-            published=True, organizer__user__is_active=True, visibility="public"
+            published=True,
+            suspended_at__isnull=True,
+            organizer__user__is_active=True,
+            visibility="public",
         ).select_related("organizer")
 
     def perform_create(self, serializer):
@@ -140,6 +148,8 @@ class Publish(APIView):
         event = get_object_or_404(managed_events(request.user).select_for_update(), pk=pk)
         if serializer.validated_data["published"] and event.starts_at <= timezone.now():
             raise services.Conflict("Cannot publish an event that has started.")
+        if serializer.validated_data["published"] and event.suspended_at:
+            raise services.Conflict("Event is suspended by a platform admin.")
         event.published = serializer.validated_data["published"]
         event.save(update_fields=["published"])
         services.record_audit(
@@ -365,22 +375,24 @@ class TicketQR(APIView):
         return response
 
 
+def scanned_ticket(request, pk, token):
+    # One query resolves the ticket, its event and organizer for the scanner apps:
+    # by id from the URL, or straight from the signed QR token when none is given.
+    lookup = {"pk": pk} if pk is not None else {"identifier": services.qr_identifier(token)}
+    return get_object_or_404(
+        Ticket.objects.select_related("order_item__order__event__organizer"),
+        order_item__order__event__in=scan_events(request.user),
+        **lookup,
+    )
+
+
 class VerifyTicket(APIView):
     permission_classes = [permissions.IsAuthenticated, CanCheckInEvent]
 
     def post(self, request, pk=None):
         serializer = QRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        lookup = (
-            {"pk": pk}
-            if pk is not None
-            else {"identifier": services.qr_identifier(serializer.validated_data["qr_token"])}
-        )
-        ticket = get_object_or_404(
-            Ticket.objects.select_related("order_item__order"),
-            order_item__order__event__in=scan_events(request.user),
-            **lookup,
-        )
+        ticket = scanned_ticket(request, pk, serializer.validated_data["qr_token"])
         self.check_object_permissions(request, ticket.order_item.order.event)
         services.check_qr(ticket, serializer.validated_data["qr_token"])
         return Response(
@@ -394,19 +406,9 @@ class CheckIn(APIView):
     def post(self, request, pk=None):
         serializer = QRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        if pk is None:
-            pk = get_object_or_404(
-                Ticket,
-                identifier=services.qr_identifier(serializer.validated_data["qr_token"]),
-                order_item__order__event__in=scan_events(request.user),
-            ).pk
-        ticket = get_object_or_404(
-            Ticket.objects.select_related("order_item__order__event"),
-            pk=pk,
-            order_item__order__event__in=scan_events(request.user),
-        )
+        ticket = scanned_ticket(request, pk, serializer.validated_data["qr_token"])
         self.check_object_permissions(request, ticket.order_item.order.event)
-        ticket = services.check_in(pk, request.user, serializer.validated_data["qr_token"])
+        ticket = services.check_in(ticket, request.user, serializer.validated_data["qr_token"])
         return Response(TicketSerializer(ticket).data)
 
 
@@ -538,3 +540,26 @@ class EventAuditLog(generics.ListAPIView):
     def get_queryset(self):
         event = get_object_or_404(managed_events(self.request.user), pk=self.kwargs["pk"])
         return AuditLog.objects.filter(event=event)
+
+
+class AdminEventSuspend(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        serializer = SuspendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        event = get_object_or_404(Event.objects.select_for_update(), pk=pk)
+        reason = serializer.validated_data["reason"]
+        if serializer.validated_data["suspended"]:
+            event.suspended_at = event.suspended_at or timezone.now()
+            event.suspension_reason = reason
+            action = "event.suspended"
+        else:
+            event.suspended_at = None
+            event.suspension_reason = ""
+            action = "event.unsuspended"
+        event.save(update_fields=["suspended_at", "suspension_reason"])
+        # Recorded in the event's own history so the organizer sees who and why (SRS 4.11).
+        services.record_audit(event, request.user, action, event, reason)
+        return Response(EventSerializer(event).data)

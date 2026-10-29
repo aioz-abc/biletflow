@@ -3,23 +3,29 @@ import uuid
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import transaction
+from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import generics, permissions
 from rest_framework import serializers as drf_serializers
+from rest_framework.exceptions import PermissionDenied
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
+from rest_framework_simplejwt.token_blacklist.models import BlacklistedToken, OutstandingToken
 from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenRefreshView
 
 from .models import User
+from .permissions import IsPlatformAdmin
 from .serializers import (
     ActiveRefreshSerializer,
+    AdminUserSerializer,
     LoginSerializer,
     LogoutSerializer,
     RegisterSerializer,
     ResetConfirmSerializer,
     ResetRequestSerializer,
+    SuspendSerializer,
     UIDTokenSerializer,
     user_payload,
 )
@@ -143,3 +149,37 @@ class LogoutView(PublicAuthView):
 class MeView(APIView):
     def get(self, request):
         return Response(user_payload(request.user))
+
+
+class AdminUserList(generics.ListAPIView):
+    serializer_class = AdminUserSerializer
+    permission_classes = [IsPlatformAdmin]
+
+    def get_queryset(self):
+        users = User.objects.select_related("organizer_profile").order_by("pk")
+        search = self.request.query_params.get("search", "").strip()
+        return users.filter(email__icontains=search) if search else users
+
+
+class AdminUserSuspend(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    @transaction.atomic
+    def post(self, request, pk):
+        serializer = SuspendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = get_object_or_404(User.objects.select_for_update(), pk=pk)
+        if user.is_superuser:
+            # Platform admins are provisioned out of band; one cannot lock out another.
+            raise PermissionDenied("Platform admins cannot be suspended here.")
+        suspended = serializer.validated_data["suspended"]
+        user.is_active = not suspended
+        user.save(update_fields=["is_active"])
+        if suspended:
+            # Access tokens die on the next request (JWTAuthentication checks is_active);
+            # refresh tokens are blacklisted so the session cannot be renewed either.
+            BlacklistedToken.objects.bulk_create(
+                [BlacklistedToken(token=t) for t in OutstandingToken.objects.filter(user=user)],
+                ignore_conflicts=True,
+            )
+        return Response(AdminUserSerializer(user).data)

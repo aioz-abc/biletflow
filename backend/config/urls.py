@@ -22,4 +22,7 @@ urlpatterns += [
     path("api/auth/reset-password", auth.ResetPasswordView.as_view()),
     path("api/auth/reset-password/confirm", auth.ResetPasswordConfirmView.as_view()),
     path("api/auth/me", auth.MeView.as_view()),
+    path("api/admin/users", auth.AdminUserList.as_view()),
+    path("api/admin/users/<int:pk>/suspend", auth.AdminUserSuspend.as_view()),
+    path("api/admin/events/<int:pk>/suspend", ticketing.AdminEventSuspend.as_view()),
 ]

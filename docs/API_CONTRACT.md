@@ -232,8 +232,8 @@ Public request:
 |--------|----------|--------------|--------|
 | GET | /tickets/:id | Ticket details/status | planned |
 | GET | /tickets/:id/pdf | Print-optimized PDF | planned |
-| POST | /tickets/:id/verify | Validate QR at check-in (mobile) | planned |
-| POST | /tickets/:id/check-in | Record check-in | planned |
+| POST | /tickets/:id/verify | Validate QR at check-in (mobile) | implemented |
+| POST | /tickets/:id/check-in | Record check-in | implemented |
 | POST | /tickets/:id/undo-check-in | Reverse check-in | planned |
 
 ## Paid Sales Activation
@@ -310,11 +310,11 @@ non-admin caller.
 
 | Method | Endpoint | Description | Status |
 |--------|----------|--------------|--------|
-| GET | /admin/users | Search users | planned |
+| GET | /admin/users | Search users (`?search=` email) | implemented |
 | GET | /admin/events | Search/moderate events | planned |
 | GET | /admin/orders | Search orders | planned |
-| POST | /admin/users/:id/suspend | Suspend user | planned |
-| POST | /admin/events/:id/suspend | Suspend event | planned |
+| POST | /admin/users/:id/suspend | Suspend / restore user | implemented |
+| POST | /admin/events/:id/suspend | Suspend / restore event | implemented |
 | GET | /admin/activations | Review activation requests | planned |
 | GET | /admin/reports | Operational reports export | planned |
 
