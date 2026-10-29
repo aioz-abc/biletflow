@@ -116,3 +116,94 @@ collections and refunds; label their scope and timestamp rule explicitly.
 
 This document is the prepared handoff. No teammate contact or sign-off has been
 performed automatically; agreement remains a team coordination step.
+
+## Backend review (Aizhan, October 29, 2026)
+
+Checked against the code on `dev` at `c8f22ae` (`ticketing/models.py`,
+`services.py`). The endpoint, access rule, date rules, money units, response
+shape and acceptance cases are **agreed as written**, with the changes below.
+Each answer says what the code does today, so the dashboard numbers follow
+real behaviour rather than an assumption.
+
+### Facts from the code that the definitions must follow
+
+- **Refunds are always full and per order.** `refund_order` creates one
+  `Refund` per `Payment` with `amount_minor = payment.amount_minor`; there is
+  no partial refund. A refunded order's tickets all become `refunded`.
+- **Free orders have no `Payment`.** They are cancelled, not refunded: the
+  order and its tickets become `cancelled`, and no money row is written.
+- **A checked-in ticket is never voided afterwards.** Both refund and cancel
+  refuse an order with a checked-in ticket.
+- **A refunded order's fee is not charged.** `sales_summary` sums
+  `fee_minor` only for payments without a refund.
+- **A campaign may apply to only some ticket types** (`campaign.ticket_types`;
+  empty means all), and `discountable()` takes the discount only from those
+  lines. **These types can be edited after redemptions** (`PATCH
+  /campaigns/{id}` accepts `ticket_types`).
+- **Inventory is held by order quantities, not tickets.** `reserved(event,
+  type)` counts confirmed orders plus unexpired pending ones; a cancel or
+  refund releases the seats by changing the order status.
+
+### Answers to the handoff questions
+
+1. **Endpoint, fields and dates:** agreed. Use `managed_events()` for the
+   404 scope, as campaigns do. Dates follow `TIME_ZONE = "Asia/Almaty"`, which
+   is already the project setting. The 366-day limit is fine.
+
+2. **Which timestamp puts an amount on a day:**
+   - sale, discount and issued tickets: `Order.confirmed_at`. For paid orders
+     `Payment.created_at` falls in the same transaction; `confirmed_at` also
+     covers free orders, which have no payment;
+   - refund: `Refund.created_at`;
+   - fee: charged on the sale day and **reversed on the refund day**. So
+     `fees_minor` for a period = fees of payments confirmed in it − fees of
+     payments refunded in it. Summed over all time this equals `sales_summary`.
+   - A cancelled free registration changes no money and no daily series, only
+     the current `inventory` and `active_tickets` (there is no `cancelled_at`).
+
+3. **Do historical issued counts include later-voided tickets?** **Yes.**
+   `issued_tickets` counts every ticket created by a confirmation in the
+   period, whatever its status now. `active_tickets` is the separate current
+   count. This keeps a past day's numbers from changing after a refund.
+
+4. **Sale-cohort view for refunds and fees:** **not in Phase 5.** Cash-flow
+   dates only, as proposed. A cohort view can be added later without new data,
+   because `Refund → Payment → Order.confirmed_at` already links them.
+
+5. **Allocation across ticket types** — changed from the proposal:
+   - **Discount:** split only across the lines the campaign applied to
+     **at checkout**, in proportion to their line subtotal
+     (`unit_price_minor × quantity`). Lines the campaign did not cover get 0.
+     Splitting across all lines would give a VIP-only discount partly to
+     General admission.
+   - **Because campaign types are editable, the split cannot be recomputed
+     later.** I will store it at checkout: a new `OrderItem.discount_minor`,
+     with existing orders backfilled from the campaigns as they are now
+     (only seed and test data exist). Then the filtered revenue simply sums
+     stored line values, and lines always reconcile to the order.
+   - **Refund:** no proportional rule is needed. Refunds are full, so a line's
+     refund = its collected amount (line subtotal − line discount).
+   - **Fee:** order-level, split in proportion to each line's collected
+     amount.
+   - **Rounding** (discount and fee): floor each share, then give the
+     leftover tiyn one at a time to the largest fractional parts, ties to the
+     lower `OrderItem.id`. Shares then always add up exactly to the order value.
+
+6. **Inventory:** compute `remaining` with the existing `reserved()` helper,
+   so it can never disagree with checkout. With `ticket_type`, return that
+   type's `quantity − reserved(event, type)` as `type_remaining`, next to
+   the whole-event `remaining`, never in its place (acceptance case 10).
+
+7. **Naming:** agreed. Existing responses keep their fields. The new endpoint
+   uses only `sales_before_discount_minor`, `discount_minor`,
+   `collected_minor`, `refunded_minor`, `fees_minor` and
+   `net_receipts_minor`, never a bare `gross_minor`.
+
+### Delivery
+
+- **Aizhan:** `OrderItem.discount_minor` (migration, backfill, tests) and the
+  `GET /events/{id}/analytics` endpoint. First a stub that returns the agreed
+  shape with zero-filled data, so the dashboard can be built against it, then
+  the real aggregation with acceptance cases 1–10 as backend tests.
+- **Mirat:** the dashboard views, built against the stub first.
+- Dates to be agreed in the next team sync.
