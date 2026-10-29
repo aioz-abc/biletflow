@@ -21,6 +21,14 @@
 пока не установлена. Адреса `/api/...` ниже — реально реализованные backend
 routes; маршруты экранов перечислены в `frontend/src/App.jsx`.
 
+Экраны организатора вложены в общую оболочку
+`frontend/src/components/OrganizerLayout.jsx` (боковое меню + `<Outlet />`).
+Экраны аналитики Мирата добавляются в неё дочерним маршрутом в `App.jsx` и
+пунктом меню. Адреса `/organizer/analytics` и `/organizer/history` пока
+перехватывает `main.jsx` для прототипа Мирата, поэтому новый экран должен либо
+заменить прототип, либо получить другой адрес. Промокампании
+(`/organizer/campaigns/new`) по-прежнему отдельная страница со своим входом.
+
 ## 2. Локальный запуск и соединение
 
 Из корня репозитория:
@@ -47,10 +55,15 @@ Backend: `http://127.0.0.1:8000`. Проверка: `GET /api/health` возвр
 BILETFLOW_API_TARGET=http://127.0.0.1:8001 npm run dev
 ```
 
-Работают: `/register`, `/login`, `/events/:id` (выбор билетов, промокод из
-Campaign QR), `/checkout/:orderId`, `/tickets/:id`, `/account`,
-`/organizer/events`, `/organizer/events/new` и `/organizer/events/:id/edit`
-(включая тарифы). Экраны attendees и check-in из таблицы ниже ещё не сделаны.
+Работают: `/register`, `/login`, `/forgot-password`, `/reset-password`,
+`/events/:id` (выбор билетов, промокод из Campaign QR), `/checkout/:orderId`,
+`/tickets/:id`, `/account`, `/support`, `/support/new`, `/support/:id`, кабинет
+организатора `/organizer` (обзор продаж), `/organizer/events`,
+`/organizer/events/new`, `/organizer/events/:id` (продажи события) и
+`/organizer/events/:id/edit` (включая тарифы). Экраны attendees и check-in из
+таблицы ниже ещё не сделаны. Экраны поддержки требуют API из PR #14
+(`aizhan/support-cases`); без него `/support` показывает, что поддержка
+недоступна.
 
 Frontend должен обращаться к относительным `/api/...`. Прямой вызов порта
 8000 из браузера с другого origin потребует CORS, которого сейчас нет.
@@ -69,11 +82,18 @@ Frontend должен обращаться к относительным `/api/.
 | --- | --- | --- |
 | `/register` | POST `/auth/register` | Тип аккаунта, email, пароль; для организатора профиль |
 | `/login` | POST `/auth/login` | Войти, сохранить сессию, вернуться на исходный экран |
+| `/forgot-password` | POST `/auth/reset-password` | Запросить код сброса; ответ одинаковый для любого email |
+| `/reset-password` | POST `/auth/reset-password/confirm` | Новый пароль по `uid` и `token` из `?uid=&token=` или из вставленного текста письма |
 | `/events` | GET `/events?page=1` | Опубликованные события, пустой список и пагинация |
 | `/events/:id` | GET `/events/:id`, GET `/events/:id/ticket-types` | Описание, даты, место, цены, остатки и выбор количества |
 | `/checkout/:orderId` | GET `/orders/:id`, POST `/orders/:id/preview`, POST `/orders/:id/checkout`, POST `/orders/:id/cancel` | Серверная сумма со скидкой до оплаты, срок резерва, результат симуляции |
 | `/tickets/:id` | GET `/tickets/:id`, GET `/tickets/:id/qr` | QR, номер, статус; сведения о событии загрузить отдельно |
-| `/account` | GET `/me/orders`, GET `/me/tickets` | Свои заказы и билеты, переход к незавершённому заказу |
+| `/account` | GET `/me/orders`, GET `/me/tickets` | Свои заказы и билеты, переход к незавершённому заказу, «Get help» по заказу |
+| `/support` | GET `/support-cases?status=` | Свои обращения; организатору также обращения по его событиям |
+| `/support/new?ticket=` / `?order=` / `?event=` | POST `/support-cases` | Открыть обращение; без ссылки выбрать заказ, организатор может писать платформе |
+| `/support/:id` | GET `/support-cases/:id`, GET/POST `/support-cases/:id/messages`, PATCH `/support-cases/:id` | Переписка, опрос `?after=` раз в 10 секунд; статус и назначение только для стороны поддержки |
+| `/organizer` | GET `/me/events`, GET `/events/:id/sales` | Кабинет организатора: события, продано/вместимость, выручка, ожидаемая выплата |
+| `/organizer/events/:id` | GET `/events/:id`, GET `/events/:id/sales` | Продажи события: скидки, возвраты, комиссии, разбивка по тарифам |
 | `/organizer/events` | GET `/me/events` | Свои события, включая черновики |
 | `/organizer/events/new` | POST `/events` | Создать черновик |
 | `/organizer/events/:id/edit` | GET/PATCH `/events/:id`, POST `/events/:id/publish` | Изменить поля и отдельно опубликовать/снять с публикации |
