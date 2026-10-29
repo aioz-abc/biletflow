@@ -1,0 +1,1221 @@
+
+===== PAGE 1 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            Software Requirements Specification                                     
+                                                                                    
+            BiletFlow: Self-Service Event Ticketing Platform for Kazakhstan         
+                                                                                    
+           Version: 0.3                                                             
+            Status: InitialDraft                                                    
+                                                                                    
+            ProjectType: Webandmobileeventandticketmanagementplatform               
+                                                                                    
+            Executive Summary                                                       
+                                                                                    
+                                                                                    
+            BiletFlowisaKazakhstan-focusedself-serviceplatformthatallowsindividuals,studentorgani-
+            zations,businesses,andcommunitygroupstocreateeventsandissuedigitaltickets.
+            Creatinganeventanddistributingfreeticketsisfree. Organizerswhowanttosellpaidtickets
+            must activate paid sales for the event by paying a one-time activation fee and completing
+            identityandpayoutverification.                                          
+                                                                                    
+           The platform provides event pages, ticket inventory management, online registration, se-
+            curepayments,QR-codetickets,calendarexport,attendeemanagement,andamobileticket-
+           verificationappforeventadministrators.                                   
+                                                                                    
+                                                                                    
+            1. Introduction                                                         
+                                                                                    
+            1.1 Purpose                                                             
+                                                                                    
+           ThisdocumentdefinestheinitialrequirementsforBiletFlow. Itdescribestheplatform’susers,
+            businessmodel,mainfeatures,constraints,andMVPscope.                     
+                                                                                    
+                                                                                    
+            1.2 Scope                                                               
+                                                                                    
+           Theplatformwillalloworganizersto:                                        
+                                                                                    
+              • Createandpublishpublicorprivatephysicaleventsheldatavenue.          
+              • Createmultipletickettypes.                                          
+              • Configureassigned-seatingeventsandinteractiveseatmaps.              
+              • Issuefreeticketswithoutpayingaplatformfee.                          
+              • Activatepaidticketsalesforindividualevents.                         
+              • Setprices,quantities,andsaleperiods.                                
+              • Trackregistrationsandrevenue.                                       
+              • SenddigitalticketscontaininguniqueQRcodes.                          
+              • Allowattendeestodownloadandprinttheirtickets.                       
+                                                                                    
+                                                                                    
+                                                                                    
+                                          1                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 2 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • Assigneventadministratorswhoverifyticketsandcheckattendeesinthroughamobile
+               app.                                                                 
+              • Allowattendeestoexporteventdetailstotheirpreferredcalendars.        
+              • Cancelordersandprocessrefundswherepermitted.                        
+                                                                                    
+           Attendeeswillbeabletodiscoverevents,registerorpurchasetickets,receivedigitaltickets,
+            addeventdetailstotheircalendars,andpresenttheirticketsforcheck-in.      
+                                                                                    
+                                                                                    
+            1.3 Definitions                                                         
+                                                                                    
+              • Organizer: Auserwhocreatesandmanagesanevent.                        
+              • Attendee: Apersonwhoregistersfororpurchasesaticket.                 
+              • EventAdmin: Anorganizer-authorizeduserwhousesthemobileapptoverifytickets
+               andcheckinattendees. ThisroleisseparatefromthePlatformAdmin.         
+              • FreeTicket: Aticketwithnopaymentrequirement.                        
+              • PaidTicket: Aticketthatrequirespaymentduringcheckout.               
+              • Paid Sales Activation: The process that enables an organizer to collect money for an
+               event.                                                               
+              • SupportCase: Asupportrequestlinkedtoauser,event,order,orticketandrepresented
+               throughanasynchronouschat-likeconversation.                          
+              • PromoCode: Anorganizer-createdcodethatappliesaconfiguredticketdiscountand
+               attributestheresultingordertoacampaign.                              
+              • CampaignQRCode: ApromotionalQRcodethatopensaneventpagethroughatrackable
+               linkandautomaticallyappliesitsassociatedpromocode. Itisnotanadmissionticket.
+              • PlatformAdmin: Internalstaffresponsibleformoderation,disputes,andplatformman-
+               agement.                                                             
+              • PaymentProcessor: Anexternalservicethatprocessespaymentsandorganizerpayouts.
+                                                                                    
+                                                                                    
+            2. Overall Description                                                  
+                                                                                    
+                                                                                    
+            2.1 Product Perspective                                                 
+                                                                                    
+            BiletFlowwillconsistof:                                                 
+              • Aresponsivewebapplicationfororganizersandattendees.                 
+              • AdedicatediOSandAndroidapplicationforeventadministratorstoverifyticketsand
+                                                                                    
+               managecheck-in.                                                      
+              • Anadministrativewebportal.                                          
+              • Backendservicesforevents,orders,payments,tickets,supportcases,promotionalcam-
+               paigns,notifications,andreporting.                                   
+              • Integrationswithapaymentprocessor,emailprovider,andcalendar-exportservices.
+                                                                                    
+                                                                                    
+                                                                                    
+                                          2                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 3 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            2.2 Stakeholders                                                        
+                                                                                    
+              • Eventorganizers                                                     
+              • Attendees                                                           
+              • Eventadministratorsandcheck-instaff                                 
+              • Platformadministrators                                              
+              • Paymentandpayoutproviders                                           
+              • DevelopmentandQAteams                                               
+              • Projectsponsorsandbusinessstakeholders                              
+                                                                                    
+                                                                                    
+            2.3 User Classes                                                        
+                                                                                    
+            Attendee                                                                
+                                                                                    
+            Canbrowseevents,register,purchasetickets,downloadtickets,andreviewexistingorders.
+                                                                                    
+                                                                                    
+            Organizer                                                               
+            Cancreateevents,configuretickettypes,activatepaidsales,manageattendees,viewsales,and
+            assigncheck-instaff.                                                    
+                                                                                    
+                                                                                    
+            Event Admin                                                             
+                                                                                    
+            Canusethemobileapptoselectassignedevents,scanandverifyQR-codetickets,searchfor
+            attendees,andrecordorreversecheck-ins.                                  
+                                                                                    
+                                                                                    
+            Platform Admin                                                          
+            Canmoderateevents,manageusers,reviewpaymentactivationrequests,handledisputes,and
+           viewplatformreports.                                                     
+                                                                                    
+                                                                                    
+            3. Business and Monetization Model                                      
+                                                                                    
+            3.1 Free Events                                                         
+                                                                                    
+            Organizersmay:                                                          
+                                                                                    
+              • Createandpublisheventswithoutcharge.                                
+              • Createfreetickettypes.                                              
+              • IssueQR-codetickets.                                                
+              • Useattendeelistsandcheck-infunctionality.                           
+                                                                                    
+                                                                                    
+                                                                                    
+                                          3                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 4 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • Sendbasicconfirmationmessages.                                      
+                                                                                    
+                                                                                    
+            3.2 Paid Events                                                         
+                                                                                    
+            Paidticketsalesremaindisableduntiltheorganizer:                         
+                                                                                    
+             1. Createsaneventandatleastonepaidtickettype.                          
+             2. Completesidentityandpayoutverification.                             
+             3. Paystheevent’sPaidSalesActivationFee.                               
+             4. Connectsorregistersavalidpayoutaccount.                             
+             5. Acceptsthepaid-eventterms.                                          
+                                                                                    
+            Onceactivated,theorganizercancollectticketpaymentsforthatevent.         
+            FortheacademicMVP,identitychecks,activation-feepayment,ticketpayment,andorganizer
+            payoutsmaybeimplementedwithaprovidersandboxorclearlylabelledsimulation. Noreal
+            moneymovementisrequiredforthetermdemonstration.                         
+                                                                                    
+                                                                                    
+            3.3 Recommended Initial Pricing Model                                   
+                                                                                    
+              • Freeevents: noplatformfee.                                          
+              • PaidSalesActivationFee: one-timefeeperevent,chargedinKZT;amounttobedeter-
+               mined.                                                               
+              • Payment-processingcharges: deductedfromeachtransaction.             
+              • Optionalper-ticketservicefee: excludedfromtheinitialMVPandconsideredforalater
+               release.                                                             
+                                                                                    
+           Thismodelgivesorganizersthecompletebasicworkflowatnocostandchargesthemonly
+           whentheyintendtogeneraterevenue.                                         
+                                                                                    
+                                                                                    
+            4. System Features and Requirements                                     
+                                                                                    
+            4.1 Account Management                                                  
+                                                                                    
+                                                                                    
+              • Usersshallbeabletoregisterusinganemailaddress.                      
+              • Usersshallbeabletoverifytheiremailaddresses.                        
+              • Usersshallbeabletosignin,signout,andresetpasswords.                 
+              • Organizersshallhaveaprofilecontainingcontactandpayoutinformation.   
+              • Thesystemshallsupportrole-basedpermissions.                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                          4                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 5 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            4.2 Event Management                                                    
+                                                                                    
+            Organizersshallbeableto:                                                
+                                                                                    
+              • Create,edit,duplicate,publish,unpublish,andcancelevents.            
+              • Addaneventtitle,description,category,images,venue,date,andtime.     
+              • Createphysical,venue-basedevents.                                   
+              • Markeventsaspublic,unlisted,orprivate.                              
+              • Defineregistrationopeningandclosingtimes.                           
+              • Setaneventcapacity.                                                 
+              • Previewaneventbeforepublication.                                    
+                                                                                    
+                                                                                    
+            4.3 Ticket Management                                                   
+                                                                                    
+            Organizersshallbeableto:                                                
+                                                                                    
+              • Createfreeandpaidtickettypes.                                       
+              • Setticketname,description,price,andquantity.                        
+              • Configureticketsalesstartandendtimes.                               
+              • Limitthenumberofticketspurchasedinoneorder.                         
+              • Hidetickettypeswithoutdeletingthem.                                 
+              • Viewthenumberofavailable,reserved,sold,refunded,andchecked-intickets.
+                                                                                    
+           Thesystemshallpreventticketsaleswheninventoryhasbeenexhausted.           
+                                                                                    
+                                                                                    
+            4.3.1 Assigned Seating and Seat Selection                               
+              • Organizersshallbeabletomarkaneventasgeneraladmissionorassignedseating.
+              • TheacademicMVPshallprovideatleastonepredefinedvenuelayoutcontainingsections,
+                                                                                    
+               rows,seatnumbers,accessibleseats,andpricecategories.                 
+              • Organizersshallbeabletoselectandconfigurethepredefinedlayout; avisualvenue-
+               layouteditorisnotrequired.                                           
+              • Forassigned-seatingevents,attendeesshallseeaninteractiveseatmapduringregistra-
+               tionorcheckout.                                                      
+              • Theseatmapshallclearlydistinguishavailable,selected,temporarilyheld,sold,unavail-
+               able,andaccessibleseatswithbothcolorsandtextorsymbols.               
+              • Attendeesshallbeabletoselectoneormoreavailableseatsandseetheticketpricebefore
+               continuingtocheckout.                                                
+              • Selectedseatsshallbeheldtemporarilywhilecheckoutisinprogress.       
+              • Aseatholdshallexpireandreleasetheseatwhencheckoutisabandonedoritstimelimit
+               isreached.                                                           
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                          5                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 6 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • The system shall prevent two orders from purchasing the same seat, including when
+               multipleattendeescheckoutconcurrently.                               
+              • Theassignedsection,row,andseatnumbershallbestoredontheticketandorderitem.
+                                                                                    
+                                                                                    
+            4.4 Free Registration                                                   
+                                                                                    
+              • Anattendeeshallbeabletoreserveafreeticketwithoutenteringpaymentinformation.
+              • Thesystemshallcreateanorderwithazero-valuetotal.                    
+              • TheattendeeshallreceiveaconfirmationemailandQR-codeticket.          
+              • Theorganizershallseetheregistrationintheattendeelist.               
+                                                                                    
+                                                                                    
+            4.5 Paid Sales Activation                                               
+                                                                                    
+              • Paidticketsshallnotbepurchasablebeforeactivation.                   
+              • Theorganizershallseeanactivationchecklist.                          
+              • Thesystemshallrecordpaymentoftheactivationfee.                      
+              • Thesystemshallverifythatthesimulatedorsandboxpayoutrequirementsarecomplete.
+              • Activationshallapplyonlytotheselectedevent.                         
+              • Platformadministratorsshallbeabletosuspendpaidsaleswhenfraudorpolicyviolations
+               aresuspected.                                                        
+                                                                                    
+                                                                                    
+            4.6 Checkout and Payments                                               
+                                                                                    
+              • Attendeesshallbeabletoselectticketsandprovideattendeedetails.       
+              • Ticketinventoryshallbetemporarilyreservedduringcheckout.            
+              • Thesystemshallcalculatetickettotalsandprocessingcharges.            
+              • Paymentsshallbeprocessedthroughanexternalprovidersandboxoraclearlylabelled
+               internalsimulationfortheacademicMVP.                                 
+                                                                                    
+              • Ticketsshallonlybeissuedaftersuccessfulpaymentconfirmation.         
+              • Failedorabandonedtransactionsshallnotcreatevalidtickets.            
+              • Organizersshallbeabletoviewgrosssales,fees,refunds,andestimatedpayouts.
+              • Demonstrationpaymentrecordsshallneverbepresentedasrealfinancialtransactions.
+                                                                                    
+                                                                                    
+            4.7 Digital Tickets                                                     
+                                                                                    
+            Eachissuedticketshallinclude:                                           
+                                                                                    
+              • Auniqueticketidentifier.                                            
+              • Eventandticket-typeinformation.                                     
+                                                                                    
+                                                                                    
+                                                                                    
+                                          6                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 7 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • Attendeeinformation.                                                
+              • Atamper-resistantQRcode.                                            
+              • Currentstatus: valid,checkedin,cancelled,orrefunded.                
+                                                                                    
+           Ticketsshallbeavailablethroughemailandtheattendee’saccount.              
+              • Attendeesshallbeabletodownloadeachticketasaprint-optimizedPDFandprintit
+               fromastandardbrowserorPDFviewer.                                     
+              • Aprintedticketshallincludetheeventname,dateandtime,venue,tickettype,attendee
+                                                                                    
+               name,assignedsection/row/seatwhenapplicable,ticketidentifier,andQRcode.
+              • Payment-carddetailsandotherunnecessarysensitiveinformationshallnotappearon
+               theprintedticket.                                                    
+              • The QR code shall remain large and clear enough to be scanned from a paper copy,
+               includingwhenprintedingrayscale.                                     
+              • Digitalandprintedcopiesofthesameticketshallshareoneticketidentifierandshallnot
+               createseparateadmissions.                                            
+                                                                                    
+                                                                                    
+            4.8 Mobile Ticket Verification and Event Check-In                       
+                                                                                    
+           Thesystemshallprovideadedicatedmobileappforauthorizedeventadministrators. Theapp
+            shallallowthemto:                                                       
+                                                                                    
+              • Signinsecurelyandviewonlyassignedevents.                            
+              • ScanticketQRcodesusingthedevicecamera.                              
+              • Validateticketauthenticityandstatusinrealtime.                      
+              • Displayaclearvalid,invalid,cancelled,refunded,oralready-usedresult. 
+              • Recordasuccessfulcheck-inandpreventthesameticketfrombeingusedtwice. 
+              • Searchforattendeesmanually.                                         
+              • Undoanaccidentalcheck-inwhereauthorized.                            
+              • Viewthetotalnumberofregisteredandchecked-inattendees.               
+              • Synchronizecheck-inrecordswiththecentralplatform.                   
+                                                                                    
+           TheacademicMVPrequiresonlineverificationonly. Offlinesynchronizationisdeferred.
+                                                                                    
+                                                                                    
+            4.9 Orders, Cancellations, and Refunds                                  
+                                                                                    
+              • Attendeesshallbeabletoviewtheirorders.                              
+              • Organizersshallbeabletodefinearefundpolicy.                         
+              • Organizersshallbeabletocancelfreeregistrations.                     
+              • Authorizedorganizersshallbeabletoinitiatefullrefunds.               
+              • Refundedorcancelledticketsshallbecomeinvalid.                       
+              • Allpaymentandrefundactionsshallberecordedinanauditlog.              
+                                                                                    
+                                                                                    
+                                                                                    
+                                          7                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 8 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            4.10 Notifications                                                      
+                                                                                    
+           Thesystemshallsendnotificationsfor:                                      
+                                                                                    
+              • Accountverification                                                 
+              • Registrationorpurchaseconfirmation                                  
+              • Paymentfailure                                                      
+              • Ticketdelivery                                                      
+              • Eventupdates                                                        
+              • Eventcancellation                                                   
+              • Refundcompletion                                                    
+              • Organizerpayoutstatus                                               
+              • Newsupportmessage,support-caseassignment,andsupport-casestatuschanges
+                                                                                    
+                                                                                    
+            4.11 Calendar Export                                                    
+                                                                                    
+              • AttendeesshallbeabletodownloadeventdetailsasastandardiCalendar(.ics)file.
+              • The event page and order confirmation shall provide one-click options for common
+               calendarservices.                                                    
+              • Calendarentriesshallincludetheeventtitle,startandendtimes,timezone,venuename
+               andaddress,description,andeventURL.                                  
+              • Calendarexportsshalluseastableeventidentifiersoupdatedeventdetailscanreplace
+               anearliercalendarentry.                                              
+              • Whenaneventiscancelled,thesystemshallprovideanupdatedcancellationcalendar
+               fileorlink.                                                          
+              • Calendarexportshallnotrequiretheplatformtorequestwriteaccesstoanattendee’s
+               calendaraccount.                                                     
+                                                                                    
+                                                                                    
+            4.12 Administration                                                     
+                                                                                    
+                                                                                    
+            Platformadministratorsshallbeableto:                                    
+              • Searchforusers,events,orders,andpayments.                           
+              • Suspendusersorevents.                                               
+              • Reviewreportedevents.                                               
+              • Inspectpaid-salesactivationrecords.                                 
+                                                                                    
+              • Monitorrefunds,disputes,andpaymentfailures.                         
+              • Configureactivationfeesandplatformsettings.                         
+              • Reviewescalatedsupportcasesandpromotional-codeactivity.             
+              • Exportbasicoperationalreports.                                      
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                          8                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 9 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            4.13 Support Chat and Case Management                                   
+                                                                                    
+              • Anattendeeshallbeabletoopenasupportrequestfromanevent,order,orticketpage.
+              • Anorganizershallbeabletoopenaplatform-supportrequestconcerningaccount,acti-
+               vation,payment,ortechnicalissues.                                    
+              • A support case shall automatically include the relevant user, event, order, and ticket
+               contextwhenavailable.                                                
+              • The requester shall select an issue category such as ticket delivery, payment, refund,
+               seating,eventinformation,check-in,account,ortechnicalproblem.        
+              • Eachsupportcaseshallprovideanasynchronouschat-likemessagethread.    
+              • Attendeesandorganizersupportstaffshallbeabletoexchangemessageswithinattendee
+               supportcases.                                                        
+              • OrganizersandPlatformAdminsshallbeabletoexchangemessageswithinorganizer
+               supportcases.                                                        
+              • Authorized staff shall be able to assign a case and change its status among Open, In
+               Progress,Waiting for Customer,andResolved.                           
+              • Users shall receive in-app or email notifications when a new reply or relevant status
+                                                                                    
+               changeoccurs.                                                        
+              • Thesystemshallretainthecasehistoryandpreventusersfromviewingcasestheyare
+               notauthorizedtoaccess.                                               
+              • The academic MVP does not require typing indicators, presence information, voice
+               messages,AIchatbots,orreal-timeWebSocketdelivery.                    
+                                                                                    
+                                                                                    
+            4.14 Promo Codes and Campaign QR Codes                                  
+                                                                                    
+              • Organizersshallbeabletocreateapromotionalcampaignforanevent.        
+              • A campaign may have a percentage or fixed-KZT discount, validity dates, maximum
+               redemptions,andapplicabletickettypes.                                
+              • ThesystemshallgenerateauniquepromocodeandaspecialCampaignQRCodeforthe
+               campaign.                                                            
+              • TheCampaignQRCodeshallencodeatrackableHTTPSeventlinkcontaininganopaque
+               campaignorpromotokenratherthanadiscountamounttrustedbytheclient.     
+              • ScanningtheCampaignQRCodeshallopenthecorrecteventpageandautomatically
+               applytheassociatedpromocodeafterserver-sidevalidation.               
+              • Theattendeeshallseetheappliedcode,discount,andupdatedordertotalbeforecom-
+               pletingcheckout.                                                     
+              • Expired,disabled,exhausted,orinapplicablecodesshallberejectedwithaclearmessage.
+              • Theservershallcalculateandvalidatealldiscountsandshallpreventredemptionbeyond
+               thecampaignlimit.                                                    
+              • TheCampaignQRCodeshallbevisuallyandfunctionallydistinctfromanadmission-
+               ticketQRcode.                                                        
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                          9                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 10 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • Themobileticket-verificationappandadmissionendpointshallneveracceptaCampaign
+               QRCodeaspermissiontoenteranevent.                                    
+              • BiletFlowshallrecordexactredemptions,orders,ticketssold,grossrevenue,discount
+               amount,andnetrevenueforeachcampaign.                                 
+              • GA4mayrecordcampaign-linkvisits, checkoutstarts, andtrafficattributionwithout
+               receivingattendeenames,emailaddresses,phonenumbers,ticketidentifiers,orother
+               directpersonalinformation.                                           
+                                                                                    
+                                                                                    
+            4.15 Basic Organizer Analytics                                          
+                                                                                    
+              • Eachorganizershallhaveaccessonlytoanalyticsforeventstheymanage.     
+              • Thedashboardshallshowtotalticketcapacity,ticketssold,ticketsremaining,andper-
+               centagesold.                                                         
+              • Thedashboardshallshowgrosssales,discounts,refunds,andnetdemonstrationrevenue
+               inKZT.                                                               
+              • Organizersshallbeabletoviewsalesovertimeusingordertimestamps.       
+              • Organizersshallbeabletocomparesalesbytickettype.                    
+              • Thedashboardshallshowcampaignandpromo-coderedemptions,ticketsattributedto
+               eachcampaign,andresultingrevenue.                                    
+              • Thedashboardshallshowchecked-inattendees,absentticketholders,andthecheck-in
+               percentageafterorduringtheevent.                                     
+              • Basicfiltersshallincludeevent,daterange,andtickettype.              
+                                                                                    
+              • RequiredanalyticsshallbecalculatedfromauthoritativeBiletFloworder,ticket,cam-
+               paign,refund,andcheck-inrecords.                                     
+              • Basicanalyticsshallnotrequireattendeestoprovidedemographicinformationorcom-
+               pleteadditionalcheckoutfields.                                       
+              • GA4traffic,funnel,geographic,device,ordemographicreportingisanoptionaladvanced
+               analyticsfeatureandisnotrequiredforthebaseMVP.                       
+                                                                                    
+                                                                                    
+            4.16 Organizer Event History and Audit Trail                            
+                                                                                    
+              • The organizer dashboard shall classify events as Upcoming, Active, Completed, or
+               Cancelled.                                                           
+              • Organizersshallbeabletoopencompletedandcancelledeventsandreviewtheirretained
+               tickets,orders,refunds,check-ins,promocampaigns,supportcases,andbasicanalytics.
+              • Organizersshallbeabletoduplicateapasteventintoanewdraftwhileexcludingthe
+               originalevent’sorders,tickets,payments,check-ins,andsupportcases.    
+              • Eacheventshallprovideachronologicalactivitytimeline.                
+              • Thetimelineshallincludeimportantactionssuchaseventpublicationorcancellation,
+               ticketpriceorcapacitychanges,refunds,promo-codecreationordisabling,support-case
+               statuschanges,check-ins,andcheck-inreversals.                        
+                                                                                    
+                                                                                    
+                                                                                    
+                                         10                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 11 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • Eachhistoryentryshallcontainatimestamp,actinguser,actiontype,affectedentity,
+               andshortdescription.                                                 
+              • Organizersshallbeabletofilterhistorybydaterangeandactivitytype.     
+              • Organizerstaffshallonlyseehistoryforeventstheyareauthorizedtomanage;Platform
+               Adminsmayviewhistoryformoderationorsupportpurposes.                  
+              • Auditentriesshallnotbeeditableordeletablethroughnormalorganizerinterfaces.
+              • Fullfield-by-fieldversionhistory,rollback,andpermanentcompliancearchivalarenot
+               requiredfortheacademicMVP.                                           
+                                                                                    
+                                                                                    
+            5. Example Use Cases                                                    
+                                                                                    
+            UC1: Organizer Creates a Free Event                                     
+                                                                                    
+           Actor: Organizer                                                         
+            Precondition: Organizerhasaverifiedaccount.                             
+            Flow: Theorganizerenterseventdetails,createsafreetickettype,previewstheevent,and
+            publishesit.                                                            
+            Postcondition: Attendeescanregisterwithoutpayment.                      
+                                                                                    
+                                                                                    
+            UC2: Organizer Activates Paid Ticket Sales                              
+                                                                                    
+           Actor: Organizer                                                         
+                                                                                    
+            Precondition: Adrafteventcontainsapaidtickettype.                       
+            Flow: Theorganizercompletesverification,connectsapayoutaccount,paystheactivationfee,
+            andacceptstheterms.                                                     
+            Postcondition: Paidcheckoutbecomesavailablefortheevent.                 
+                                                                                    
+                                                                                    
+            UC3: Attendee Purchases a Ticket                                        
+                                                                                    
+           Actor: Attendee                                                          
+            Precondition: Paidsalesareactiveandticketsareavailable.                 
+            Flow: Theattendeeselectstickets,entersrequiredinformation,andcompletespayment.
+            Postcondition: AnorderandQR-codeticketareissued.                        
+                                                                                    
+                                                                                    
+            UC4: Event Admin Verifies and Checks In an Attendee                     
+                                                                                    
+           Actor: EventAdmin                                                        
+            Precondition: TheEventAdminissignedintothemobileappandassignedtotheevent.
+            Flow: TheEventAdminselectstheeventandscanstheattendee’sQRcode. Themobileapp
+                                                                                    
+                                                                                    
+                                                                                    
+                                          11                                        
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 12 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+           validatestheticketandrecordsthecheck-in.                                 
+            Postcondition: Theticketcannotbecheckedinagainunlessthepreviousactionisreversed.
+                                                                                    
+                                                                                    
+            UC5: Organizer Refunds an Order                                         
+                                                                                    
+           Actor: Organizer                                                         
+            Precondition: Theorderiseligibleforarefund.                             
+            Flow: Theorganizerselectstheorder,confirmstherefund,andthepaymentproviderprocesses
+            it.                                                                     
+            Postcondition: Theticketisinvalidatedandtheattendeeisnotified.          
+                                                                                    
+                                                                                    
+            UC6: Attendee Adds an Event to a Calendar                               
+                                                                                    
+           Actor: Attendee                                                          
+            Precondition: Theattendeeisviewinganeventpage,confirmationpage,orissuedticket.
+            Flow: Theattendeeselectsacalendaroptionordownloadsthe.icsfile.          
+            Postcondition: Acalendarentryispreparedwiththecorrecteventtimezone,venuenameand
+            address,andeventURL.                                                    
+                                                                                    
+                                                                                    
+            UC7: Attendee Prints a Ticket                                           
+                                                                                    
+           Actor: Attendee                                                          
+            Precondition: Avalidtickethasbeenissued.                                
+            Flow: Theattendeeopenstheorderorticket,downloadstheprint-optimizedPDF,andprints
+            it.                                                                     
+            Postcondition: ThepaperticketcontainsareadableQRcodethattheEventAdminmobileapp
+            canverifyattheentrance.                                                 
+                                                                                    
+                                                                                    
+            UC8: Attendee Selects an Assigned Seat                                  
+                                                                                    
+                                                                                    
+           Actor: Attendee                                                          
+            Precondition: Theeventusesassignedseatingandsalesareopen.               
+            Flow: Theattendeeopenstheinteractiveseatmap,reviewsseatavailabilityandprices,selects
+            anavailableseat,andcompletescheckoutbeforethetemporaryholdexpires.      
+            Postcondition: Thepurchasedseatislinkedtotheorderandticketandisnolongeravailable
+            tootherattendees.                                                       
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                         12                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 13 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            UC9: Attendee Requests Support                                          
+                                                                                    
+           Actor: Attendee                                                          
+            Precondition: Theattendeeisviewinganevent,order,orticket.               
+            Flow: Theattendeeselectssupport,choosesanissuecategory,writesamessage,andsubmits
+            thecase. Theorganizerrepliesthroughthesupportconversation.              
+            Postcondition: Theconversationanditsevent/order/ticketcontextareretaineduntilthecase
+            isresolved.                                                             
+                                                                                    
+                                                                                    
+            UC10: Attendee Purchases Through a Campaign QR Code                     
+                                                                                    
+           Actor: Attendee                                                          
+            Precondition: Theorganizerhasanactivepromotionalcampaignwithremainingredemptions.
+            Flow: TheattendeescanstheCampaignQRCode,openstheeventpagewiththepromocode
+            pre-applied,selectstickets,reviewsthediscount,andcompletescheckout.     
+            Postcondition: Thediscountisrecordedontheorderandthesaleisattributedtothecorrect
+            campaign.                                                               
+                                                                                    
+                                                                                    
+            UC11: Organizer Reviews Basic Analytics                                 
+                                                                                    
+           Actor: Organizer                                                         
+            Precondition: The organizer manages an event with ticket, order, campaign, or check-in
+            activity.                                                               
+                                                                                    
+            Flow: Theorganizeropenstheeventdashboard,selectsadaterangeortickettype,andreviews
+            salesprogress,revenue,campaignperformance,andattendance.                
+            Postcondition: TheorganizerseesmetricscalculatedfromBiletFlowrecordswithoutcollecting
+            additionalattendeeinformation.                                          
+                                                                                    
+                                                                                    
+            UC12: Organizer Reviews and Reuses Event History                        
+                                                                                    
+           Actor: Organizer                                                         
+            Precondition: Theorganizermanagesatleastonecompletedorcancelledevent.   
+            Flow: Theorganizeropensthepast-eventsview,reviewstheeventactivitytimelineandretained
+            operationalrecords,thenduplicatestheeventintoanewdraft.                 
+            Postcondition: Historicalrecordsremainunchangedandthenewdraftcontainsreusableevent
+            configurationwithoutcopyingoldtransactionsorattendees.                  
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                         13                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 14 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            6. Core Data Entities                                                   
+                                                                                    
+              • User                                                                
+              • OrganizerProfile                                                    
+              • Event                                                               
+              • Venue                                                               
+              • VenueSection                                                        
+              • Row                                                                 
+              • Seat                                                                
+              • SeatHold                                                            
+              • TicketType                                                          
+              • Order                                                               
+              • OrderItem                                                           
+              • Ticket                                                              
+              • Attendee                                                            
+              • Payment                                                             
+              • Refund                                                              
+                                                                                    
+              • PayoutAccount                                                       
+              • Check-InRecord                                                      
+              • StaffAssignment                                                     
+              • Notification                                                        
+              • SupportCase                                                         
+              • SupportMessage                                                      
+              • PromotionalCampaign                                                 
+              • PromoCode                                                           
+              • PromoRedemption                                                     
+              • AuditLog                                                            
+                                                                                    
+                                                                                    
+            7. Non-Functional Requirements                                          
+                                                                                    
+              • Theplatformshouldsupportmoderndesktopandmobilebrowsers.             
+              • Theticket-verificationappshallsupportcurrentiOSandAndroidversionsselectedfor
+               theMVP.                                                              
+              • Thecustomer-facinginterfaceshallinitiallysupportKazakhandRussian,withEnglish
+               availableasanadditionallocale.                                       
+              • Prices,fees,refunds,andpayoutsshalluseKZTfortheinitialKazakhstanrelease.
+              • Sensitiveinformationshallbeencryptedintransitandatrest.             
+              • Passwordsshallbestoredusingsecurepasswordhashing.                   
+              • Payment-carddatashallnotbestoreddirectlybytheplatform.              
+              • Organizerandadministratoractionsshallbeauditable.                   
+              • EventpagesshouldmeetWCAG2.1AAaccessibilityguidelines.               
+              • Thecheckoutprocessshouldremainusableundertemporaryincreasesineventtraffic.
+                                                                                    
+                                                                                    
+                                                                                    
+                                         14                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 15 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • Seatavailability shallupdate promptly, andcheckout shall usean atomicreservation
+               processtopreventdouble-sellingaseat.                                 
+              • The interactive seat map shall be usable on desktop and mobile screens and provide
+               accessiblelabelsinadditiontocolorindicators.                         
+              • QRvalidationshouldnormallycompletewithintwosecondswithaninternetconnection.
+              • PrintableticketsshallproducelegibletextandreliablyscannableQRcodesonstandard
+               A4paperincolororgrayscale.                                           
+              • Calendarexportsshallpreservetheevent’sconfiguredtimezone.           
+              • Support-caseaccessshallbeenforcedbyroleandbyrelationshiptotherelevantevent,
+               order,orticket.                                                      
+              • Promo-codevalidationandredemptionlimitsshallbeenforcedatomicallyontheserver.
+              • CampaignQRlinksshallnotcontaintrustedpriceordiscountvaluesandshallneverbe
+               acceptedbyticket-verificationendpoints.                              
+              • Analyticsqueriesandchartgenerationshallnotblockordelayticketselection,checkout,
+               paymentconfirmation,orticketissuance.                                
+              • Organizerhistoryandauditdatashallbeprotectedbythesameevent-levelauthorization
+               rulesastheunderlyingoperationalrecords.                              
+              • Thearchitectureshouldsupportadditionalcurrenciesandlanguagesinfuturereleases.
+              • Regularbackupsandrecoveryproceduresshallbeestablished.              
+                                                                                    
+                                                                                    
+            8. MVP Scope                                                            
+                                                                                    
+                                                                                    
+            Required MVP Features                                                   
+                                                                                    
+              • Userregistrationandauthentication                                   
+              • Organizerprofiles                                                   
+              • Eventcreationandpublication                                         
+              • Freeandpaidtickettypes                                              
+              • Simulatedorsandboxedpaid-salesactivation                            
+              • SimulatedorsandboxedKZTcheckout                                     
+              • QR-codeticketgeneration                                             
+              • DownloadableandprintablePDFtickets                                  
+              • Emailconfirmations                                                  
+              • Attendeeandordermanagement                                          
+              • DedicatediOSandAndroidticket-verificationappforEventAdmins          
+              • Basiccancellationsandrefunds                                        
+              • Administrativemoderation                                            
+              • Basicorganizeranalyticsforcapacity,salesovertime,revenue,tickettypes,campaigns,
+               andattendance                                                        
+              • Organizereventhistorywithpast/completed/cancelledviews,eventduplication,andan
+               activitytimeline                                                     
+              • Asynchronoussupportchatwithcasestatusandcontextualevent/order/ticketlinks
+                                                                                    
+                                                                                    
+                                                                                    
+                                         15                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 16 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • PromocodeswithspecialCampaignQRCodesandbasiccampaignsalesreporting  
+              • Docker-basedlocalordemonstrationdeployment                          
+                                                                                    
+                                                                                    
+            Bonus and Stretch Features                                              
+                                                                                    
+              • Onepredefinedassigned-seatinglayoutwithaninteractiveseat-selectionUI
+              • Calendarexportthrough.icsfilesandcommoncalendarlinks                
+              • AdvancedorganizeranalyticsusingGA4traffic/funneldatacombinedwithauthoritative
+               BiletFloworderdata                                                   
+              • Offlineticket-verificationsynchronization                           
+              • Support-messagefileattachmentsorenhancedreal-timedelivery           
+                                                                                    
+                                                                                    
+            Excluded from the Initial MVP                                           
+                                                                                    
+              • Real-moneyorganizerpayoutsandproductionfinancialprocessing          
+              • ProductionKYC/KYBoridentity-verificationworkflows                   
+              • Visualvenue-layoutdesignerandarbitraryvenueimports                  
+              • Production-gradeofflinescannersynchronization                       
+              • Advancedrefundanddisputeworkflows                                   
+              • AppStoreandGooglePlaypublication                                    
+              • Ticketresaleortransfermarketplace                                   
+              • Nativeattendeeandorganizermobileapplications                        
+              • Affiliatemarketing                                                  
+              • Recurringevents                                                     
+              • Advancedmarketingautomation                                         
+                                                                                    
+              • On-sitehardwareintegrations                                         
+              • Multipleorganizerpayoutsplits                                       
+              • Detailedaccountingandtaxautomation                                  
+              • Fullfield-by-fieldversionhistory,rollback,andproductioncompliancearchival
+                                                                                    
+                                                                                    
+            9. Suggested Technology Stack                                           
+                                                                                    
+           Thefrontendandmobiletechnologiesarerecommendedforconsistency,whiletheteammay
+            choosethebackendlanguagethatbestmatchesitsexperience. TheacademicMVPshalluse
+            one primary backend implementation; creating the same services in multiple languages or
+            introducingunnecessarymicroservicesisoutsidethetermscope.               
+                                                                                    
+              • Database: PostgreSQLorMongoDBwithMongoose. PostgreSQLmaybepairedwith
+               Node.js,Python,Go,orJava;selectingNode.jsdoesnotrequireMongoDB.      
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                         16                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 17 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • BackendOption1-JavaScript/TypeScript: Node.jswithExpressoracomparableframe-
+               work;thisproducesaMERN-stylestackwhencombinedwithMongoDBandReact     
+              • BackendOption2-Python: FastAPIorDjango                              
+              • BackendOption3-Go: GowithalightweightHTTPframeworkorthestandardHTTP 
+               library                                                              
+              • BackendOption4-Java: SpringBoot                                     
+              • Web Application: React; Next.js may be used when server-side rendering or search
+               visibilityisneeded                                                   
+              • SeatMapUI:ReactwithSVGorCanvasrendering,onepredefinedlayout,andserver-
+               validatedseatholds                                                   
+              • MobileTicket-VerificationApp: ReactNative,optionallywithExpo        
+              • FrontendLanguage: TypeScriptisrecommendedacrossthewebapplicationandReact
+               Nativeapp;itmayalsobesharedwiththebackendwhenNode.jsisselected       
+              • Styling: TailwindCSS                                                
+              • Payments: Provider sandbox or internal simulation using KZT; production provider
+               integrationisdeferred                                                
+              • Email: Transactionalemailprovider                                   
+              • FileStorage: S3-compatibleobjectstorage                             
+              • PrintableTickets: Server-generatedPDFbasedonthecanonicalticketrecord
+                                                                                    
+              • SupportChat: RESTAPIwithperiodicrefreshorlightweightpolling;real-timesockets
+               areoptionalandnotrequired                                            
+              • CampaignQRCodes: Server-generatedQRimagescontainingsignedoropaquepromo-
+               tionallinks                                                          
+              • Analytics: Database aggregation for exact sales/redemption data and optional GA4
+               ecommerce/campaigneventsfortrafficattribution                        
+              • Deployment: Dockercontainers                                        
+              • Design: Figma                                                       
+              • Testing: AutomatedAPI,interface,payment,andQR-validationtests       
+                                                                                    
+           Thebackendlanguageanddatabaseshallbeselectedduringtheinitialarchitecturephaseand
+            documentedwithashortrationalecoveringteamfamiliarity,developmentspeed,data-model
+            requirements,anddeploymentcomplexity.                                   
+                                                                                    
+                                                                                    
+            10. Assumptions and Dependencies                                        
+                                                                                    
+              • Theteamcanaccessasuitablepaymentsandboxorimplementaclearlylabelledpayment
+               simulation.                                                          
+              • TheinitialreleasewilloperateinKazakhstananduseKZTasitssettlementcurrency.
+              • Payment,privacy,refund,andorganizer-verificationruleswillbereviewedforcompliance
+               withapplicableKazakhstanrequirementsbeforelaunch.                    
+              • Organizersareresponsibleforeventlegality,descriptions,andrefundpolicies.
+              • Attendeeshaveaccesstoemailoranonlineaccountforticketdelivery.       
+                                                                                    
+                                                                                    
+                                                                                    
+                                          17                                        
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 18 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • EventAdminshavesupportediOSorAndroiddeviceswithworkingcameras.      
+              • Eventvenuesprovideinternetaccessforreal-timecheck-in;offlinecheck-inisoutside
+               theacademicMVP.                                                      
+              • AI-assistedtoolsmaybeusedduringdevelopment;thisdocumentdoesnotprescribea
+               particulartoolorAI-assistedworkflow.                                 
+              • Finalproductionfees,supportedpaymentmethods,paymentprovider,andpayouttiming
+               remainfuturedecisions.                                               
+                                                                                    
+                                                                                    
+            11. Initial Success Criteria                                            
+                                                                                    
+           TheMVPwillbeconsideredsuccessfulwhen:                                    
+                                                                                    
+              • Anorganizercanpublishafreeeventanddistributevalidtickets.           
+              • Anorganizercancompletethesimulatedorsandboxedpaid-salesactivationandreceive
+               demonstrationorders.                                                 
+              • AnattendeecancompletecheckoutandreceiveaQR-codeticket.              
+              • Anattendeecandownloadandprintaticketthatremainsscannableatcheck-in. 
+              • AnEventAdmincanusethemobileapptovalidateticketsandpreventduplicateentry.
+              • Anattendeecanopenacontextualsupportcaseandexchangeasynchronousmessages
+               withauthorizedorganizerstaff.                                        
+              • AnattendeecanscanaCampaignQRCode,receiveavaliddiscount,andcompletean
+               orderattributedtothecampaign.                                        
+              • AnadmissionscannerrejectsCampaignQRCodeswhilecontinuingtoacceptvalidticket
+               QRcodes.                                                             
+              • Organizerscanviewaccurateticket,attendance,payment,andrefundrecords.
+              • Organizerscanviewbasicsales,capacity,campaign,andattendanceanalyticswithout
+               addingfieldstotheattendeecheckout.                                   
+              • Organizerscanreviewpastandcancelledevents,inspectanauthorizedactivitytimeline,
+                                                                                    
+               andduplicateapasteventwithoutcopyinghistoricaltransactions.          
+              • Administratorscansuspendasuspiciouseventandstopfurthersales.        
+            BonusfeaturesareevaluatedseparatelyandarenotrequiredtosatisfythebaseMVPsuccess
+            criteria.                                                               
+                                                                                    
+                                                                                    
+            12. Key Decisions for the Next Draft                                    
+                                                                                    
+              • Finalprojectandproductname                                          
+                                                                                    
+              • FinalbackendselectionamongNode.js,Python,Go,andJava,togetherwithMongoDB
+               orPostgreSQL                                                         
+              • Activationfeeamountandrefundability                                 
+              • PaymentsandboxorsimulationmethodfortheacademicMVP                   
+                                                                                    
+                                                                                    
+                                                                                    
+                                         18                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 19 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+              • Whetherattendeesmustcreateaccounts                                  
+              • Whetherprocessingfeesarepaidbyorganizersorattendees                 
+              • Payoutdelayandreservepolicy                                         
+              • Organizerverificationrequirements                                   
+              • Eventcancellationandrefundrules                                     
+              • Predefinedseatinglayoutusedforthedemonstration                      
+              • WhethersupportcasesallowfileattachmentsintheacademicMVP             
+              • Initialpromo-codediscounttypes,redemptionlimits,andcampaignreportingfields
+              • Defaultdaterangesandchartformatsforthebasicorganizerdashboard       
+              • Academicretentionperiodforeventhistoryandauditentries               
+                                                                                    
+                                                                                    
+            13. Term Feasibility and Delivery Plan                                  
+                                                                                    
+            13.1 Feasibility Target                                                 
+                                                                                    
+           Theprojectisplannedasapolishedacademicprototypedevelopedbyateamoffiveover10–12
+           weeks. TheteammayuseAI-assisteddevelopmenttools. Thetermdeliverableisnotintended
+            tobeaproductionfinancialplatform.                                       
+                                                                                    
+           TheMVPisfeasibleonlyiftheteammaintainsthescopeboundariesinSection8. Realpayments,
+            realpayouts,productionidentityverification,arbitraryvenue-mapcreation,offlinescanner
+            synchronization,andapplication-storepublicationarenottermrequirements.  
+                                                                                    
+                                                                                    
+            13.2 Suggested Team Ownership                                           
+                                                                                    
+            Eachareashallhaveoneprimaryowner,withpeerreviewfromatleastoneotherteammem-
+            ber:                                                                    
+                                                                                    
+             1. Architecture,integration,authentication,anddeployment               
+             2. Backendevent,ticket,order,andseat-reservationservices               
+             3. Organizerandattendeewebinterfaces                                   
+             4. Admininterface,promotionalcampaigns,basicreporting,organizerhistory,calendar
+               bonus,andprintabletickets                                            
+             5. React Native verification app, support workflow, assigned-seating bonus, automated
+               testing,andreleasecoordination                                       
+                                                                                    
+            Ownershipdoesnotpreventcollaboration. SharedAPIcontractsanddatamodelsshouldbe
+            agreedbeforeparallelimplementationbegins.                               
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                         19                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+===== PAGE 20 =====
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+            13.3 Suggested 12-Week Schedule                                         
+                                                                                    
+              • Weeks 1–2: select one backend stack, confirm scope, prepare wireframes, define API
+               contractsanddatamodel,andconfigurerepositoriesandautomatedchecks     
+              • Weeks3–4: implementauthentication,roles,organizerprofiles,andeventcreation
+              • Weeks5–6: implementtickettypes,inventory,sandboxcheckout,orders,andQRgener-
+               ation                                                                
+              • Week7: implementprintablePDFtickets,promocodes,andCampaignQRCodes;add
+               calendarexportonlyifthecoreflowisonschedule                          
+              • Week8: implementtheReactNativeonlineverificationappandasynchronoussupport
+               workflow                                                             
+              • Week9: implementbasicadministration,organizerhistory,andtherequiredanalytics
+               dashboard;addassignedseatingoradvancedGA4analyticsonlyifthecoreflowisstable
+              • Week10: integratefeatures,resolvecross-applicationdefects,andcompletecore-flow
+               tests                                                                
+              • Weeks11–12: stabilize,improveusability,preparedocumentation,rehearsethedemon-
+               stration,andretaincontingencytime                                    
+                                                                                    
+            Fora10-weekterm,Weeks7–9shouldoverlapwhereteamcapacitypermits,whileWeek10
+            remainsreservedforintegrationandstabilization.                          
+                                                                                    
+                                                                                    
+            13.4 Scope and Quality Controls                                         
+                                                                                    
+              • Core end-to-end flow takes priority: create event, distribute a campaign QR, apply a
+               promo code, select or reserve a ticket, complete simulated checkout, issue the ticket,
+               requestsupport,andverifyentry.                                       
+              • FeaturedevelopmentshouldstopafterWeek9unlessamissingfeatureblocksthecore
+                                                                                    
+               demonstration.                                                       
+              • Eachfeatureiscompleteonlywhenintegrated,reviewed,tested,anddocumented.
+              • Bonusfeaturesshallnotbestartedattheexpenseofanincompleterequiredflow.
+              • Iftheprojectfallsbehind,removeassignedseating,calendarexport,advancedanalytics,
+               localizationpolish,andrefundsimulationbeforecuttingthecoreticketingflow.
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                         20                                         
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    
+                                                                                    

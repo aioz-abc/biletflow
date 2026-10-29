@@ -1,0 +1,307 @@
+# Backend MVP API
+
+Implemented contract, September 24, 2026. This document supersedes the older
+Phase 1 API proposal for the MVP routes listed below. Base: `/api`, JSON, no
+trailing slash. Protected requests use `Authorization: Bearer <access>`.
+Money is integer tiyn, currency KZT: `250000` means 2,500 KZT. Dates use ISO 8601
+with a timezone. Unknown/read-only fields in create/update payloads return 400.
+
+## Accounts
+
+| Method and path | Input / result |
+| --- | --- |
+| POST `/auth/register` | Email, password, optional first_name/last_name and account_type; 201 with `{user}` |
+| POST `/auth/verify-email` | `{uid, token}` from verification email → 200; token valid for 24 hours and single use |
+| POST `/auth/verify-email/request` | Authenticated user requests a fresh verification email; prior token is invalidated |
+| POST `/auth/login` | `{email, password}` → `{access, refresh, user}` |
+| POST `/auth/refresh` | `{refresh}` → new `{access, refresh}`; old refresh is consumed |
+| POST `/auth/logout` | `{refresh}` → 204; invalid/expired/previously revoked tokens return 401 |
+| POST `/auth/reset-password` | `{email}` → generic 200, whether the account exists or not |
+| POST `/auth/reset-password/confirm` | `{uid, token, new_password}` → 200; token valid for 1 hour and single use |
+| GET `/auth/me` | Current user, roles and organizer_profile |
+
+Organizer registration:
+
+```json
+{
+  "email": "organizer@example.com",
+  "password": "Choose-a-long-private-password!",
+  "account_type": "organizer",
+  "organizer_profile": {
+    "display_name": "Student Events",
+    "contact_email": "organizer@example.com",
+    "contact_phone": "+77000000000"
+  }
+}
+```
+
+For an attendee, omit account_type and organizer_profile. Organizer accounts
+also have attendee capability. Only administrative provisioning can grant
+platform_admin (`is_superuser`). Event Admin is granted by an organizer or
+platform admin for one event via the staff API below; it permits check-in
+and viewing that event's attendee list, not event editing or other events.
+
+Access tokens last 15 minutes; refresh tokens 7 days. Logout revokes refresh,
+while access expires naturally. Password reset invalidates existing access and
+refresh tokens by changing the password hash. Inactive accounts cannot log in,
+refresh or use protected API routes. Roles and event ownership come from live
+database records. Password validation and case-insensitive email uniqueness apply.
+Auth routes have a 60/minute per-IP local-cache throttle. Production with
+multiple workers needs a shared cache or proxy-level rate limits.
+Registration sends a verification token to console email in local development.
+The API never returns verification or reset tokens. Reissuing either token
+invalidates its predecessor. Password reset requests return the same response
+for unknown or inactive accounts. Email verification is tracked separately
+from account activation; publication does not require verified email in this
+approved pet-project MVP.
+
+## Events and inventory
+
+| Method and path | Behavior |
+| --- | --- |
+| GET `/events` | Published events from active organizers |
+| POST `/events` | Organizer creates a draft |
+| GET `/events/{id}` | Public if published; drafts visible to owner/admin only |
+| PATCH `/events/{id}` | Owner/admin updates event |
+| DELETE `/events/{id}` | Owner/admin deletes a draft only if it has no orders, campaigns or audit history |
+| POST `/events/{id}/publish` | `{published: true}` or `{published: false}` |
+| POST `/events/{id}/duplicate` | Owner/admin copies event fields + ticket types into a new unpublished draft, 201 |
+| GET `/events/{id}/ticket-types` | Ticket types; hidden types visible to owner/admin only |
+| POST `/events/{id}/ticket-types` | Owner/admin adds a type |
+| PATCH `/ticket-types/{id}` | Owner/admin changes type, including `hidden` |
+| GET `/me/events` | Organizer's events (all events for platform admin) |
+| GET `/events/{id}/attendees` | Owner/admin list of issued tickets and check-in statuses |
+| GET/POST `/events/{id}/staff` | Owner/platform admin lists assignments or grants Event Admin to an existing active user by `{email, can_check_in}` |
+| DELETE `/events/{id}/staff/{user_id}` | Owner/platform admin removes an assignment, 204 |
+
+Create event:
+
+```json
+{
+  "title": "Student concert",
+  "description": "Live music",
+  "venue": "Almaty, Main Hall",
+  "category": "music",
+  "images": ["https://example.com/poster.jpg"],
+  "starts_at": "2027-01-20T19:00:00+05:00",
+  "ends_at": "2027-01-20T21:00:00+05:00",
+  "capacity": 100,
+  "visibility": "public",
+  "refund_policy": "Full refund up to 24 hours before the event."
+}
+```
+
+Venue is a string for this MVP. `category` is free text (blank allowed);
+`images` is a list of up to 10 URL strings (no file upload in this MVP, so the
+client hosts the image and passes a link). `refund_policy` is free organizer-set
+text shown to attendees (SRS 4.9); it is not machine-enforced in this MVP.
+`visibility` is `public` (default,
+listed and publicly retrievable), `unlisted` (retrievable by ID/link, excluded
+from `GET /events`) or `private` (owner/admin only, even by ID). Event
+responses include id, organizer (profile ID) and published. Capacity must be
+1–1,000,000; start must be future when set, end later than start. An event
+with any historical orders cannot be deleted. Duplicating an event copies
+these fields plus its ticket types into a new unpublished draft with no
+inventory sold or reserved.
+
+Create ticket type:
+
+```json
+{
+  "name": "Standard",
+  "price_minor": 250000,
+  "quantity": 100,
+  "max_per_order": 5,
+  "sales_start": null,
+  "sales_end": null,
+  "hidden": false
+}
+```
+
+Name and quantity are required; price defaults to zero (free), max_per_order
+to 10, hidden to false. Quantity can be zero; max_per_order is 1–100.
+Responses include event ID and available, limited by both type inventory and
+event capacity. Availability is informational; only reservation guarantees
+inventory. Reducing quantity/capacity below sold + active holds returns 409.
+Price updates do not change existing orders. Hidden types stop new orders;
+already-held tickets may still complete checkout. Sales windows govern new
+reservations; a valid hold can complete until its own expiry.
+
+## Orders and simulated payment
+
+| Method and path | Behavior |
+| --- | --- |
+| POST `/orders` | Create a 15-minute reservation, 201 |
+| GET `/orders/{id}` | Purchaser only |
+| POST `/orders/{id}/checkout` | Purchaser sends `{outcome: "success"}` or `{outcome: "failure"}`, plus optional `promo_code` |
+| POST `/orders/{id}/preview` | Purchaser sends optional `{promo_code}` and sees a provisional subtotal, discount and total before checkout |
+| POST `/orders/{id}/cancel` | Purchaser cancels an unconfirmed order, or a confirmed free registration, releasing inventory |
+| POST `/orders/{id}/refund` | Event organizer or admin fully refunds a confirmed paid order |
+| GET `/me/orders` | Purchaser's orders |
+| GET `/me/tickets` | Purchaser's issued tickets |
+
+Create order (IDs refer to existing records):
+
+```json
+{"event": 1, "items": [{"ticket_type": 1, "quantity": 2}]}
+```
+
+At most 20 distinct types and 100 tickets per order, further limited by each
+type's max_per_order. All types must belong to the event and be on sale.
+Client prices/totals are rejected. Reservation expires after 15 minutes or at
+event start, whichever is earlier. Expired holds stop counting immediately;
+no periodic job is needed. API status is `pending`, `expired`, `cancelled` or
+`confirmed`; expired is derived from the timestamp.
+
+Orders return id, event, status, subtotal_minor, discount_minor, total_minor,
+currency, expires_at, created_at,
+confirmed_at, items (`ticket_type`, `quantity`, `unit_price_minor`) and tickets.
+Failed simulated payment leaves a pending reservation and issues no tickets;
+retry before expiry or cancel it. Success confirms the order and issues one
+ticket per unit. Free orders use the same checkout endpoint without a Payment
+record. Repeated/concurrent successful checkout of the same order returns the
+existing tickets. The order ID is the checkout idempotency boundary; creating
+another order is a separate purchase. Every order/inventory mutation locks
+the event in PostgreSQL.
+
+`subtotal_minor` is the pre-discount sum of purchase-time item prices,
+`discount_minor` the server-computed promo discount, and `total_minor` the
+amount actually charged. Totals are always recalculated on the server; a
+client-supplied discount is rejected like any other unknown field.
+Preview does not redeem a code or change the order. Checkout validates the code
+again, since its validity and remaining redemption count may change meanwhile.
+
+## Cancellations and refunds
+
+API status is `pending`, `expired`, `cancelled`, `confirmed` or `refunded`.
+
+`POST /orders/{id}/cancel` accepts the purchaser, event organizer or admin.
+A pending order cancels as before. A confirmed order cancels only when it is
+free (`total_minor` 0) and none of its tickets has been checked in;
+its tickets become `cancelled`. A confirmed paid order returns 409 and must go
+through the refund endpoint so a Refund row and audit entry always exist.
+
+`POST /orders/{id}/refund` is restricted to the event's organizer or an admin
+(SRS 4.9 gives refunds to organizers, not attendees); anyone else gets 404.
+It locks the event, then the order, then its tickets - the same lock order as
+checkout. It creates one Refund tied one-to-one to the Payment, sets the order
+to `refunded`, marks every ticket `refunded`, and appends an AuditLog entry, all
+in one transaction. Repeating the call returns the existing refund with 200
+rather than refunding twice. Free orders return 409 (cancel them instead).
+An order with any `checked_in` ticket returns 409 - see the assumption note below.
+
+Refunded and cancelled orders stop counting toward inventory, so their seats
+return to the sellable pool, exactly as an expired or cancelled hold already does.
+
+| Method and path | Behavior |
+| --- | --- |
+| GET `/events/{id}/audit-log` | Organizer/admin reads the event's append-only activity timeline |
+
+AuditLog entries carry event, actor, action, entity_type, entity_id,
+description and created_at, newest first. Event and ticket-type edits,
+publication, reservations, promo redemption, payment attempts, refunds,
+cancellations and check-ins are recorded. Rows are only ever appended.
+
+## Promo codes and campaigns
+
+| Method and path | Behavior |
+| --- | --- |
+| POST `/events/{id}/campaigns` | Organizer/admin creates a campaign, 201; response includes a one-time `campaign_link` |
+| GET `/events/{id}/campaigns` | Organizer/admin lists campaigns with their codes and a redemption report |
+| PATCH `/campaigns/{id}` | Organizer/admin updates a campaign, including `enabled: false` to stop a code |
+| GET `/campaigns/{id}/qr` | Campaign QR as SVG, encoding an HTTPS campaign link |
+| GET `/campaign-links/{token}` | Public: resolves a scanned campaign token to its event and promo code |
+| GET `/c/{token}` | Public campaign link; redirects to the frontend event page with the promo code |
+
+Create campaign:
+
+```json
+{"name": "Launch", "discount_type": "percent", "discount_value": 10,
+ "ticket_types": [1], "max_redemptions": 100, "enabled": true}
+```
+
+`discount_type` is `percent` (1-100) or `fixed` (minor units). An empty
+`ticket_types` means the campaign applies to every type on the event; any type
+listed must belong to that event. Creating a campaign also generates exactly one
+promo code and its campaign-link token.
+
+Codes are normalized to upper case with whitespace collapsed, so lookup and
+uniqueness are both effectively case-insensitive: `launch-a1b2` and
+`LAUNCH-A1B2` are the same code and the second cannot be created.
+
+A code is validated at checkout, inside the transaction that already locks the
+event, so redemption counting is serialized by the same lock that protects seat
+inventory. Rejections are explicit 400/409 responses, never a silent full-price
+charge: unknown or wrong-event code, disabled campaign, not yet started, expired,
+redemption limit reached, or no applicable ticket types in the order. A campaign
+past its `ends_at` rejects its codes but is not auto-disabled; the campaign and
+its codes are retained for reporting and audit.
+
+The discount is computed server-side from purchase-time item prices, capped at
+the order subtotal, and recorded on a PromoRedemption tied one-to-one to the
+order, so an order can never redeem twice.
+
+The campaign report returned with each campaign carries redemptions, orders,
+active tickets_sold, gross_minor, discount_minor, refund_minor and net_minor.
+Net subtracts both discounts and full refunds.
+
+Campaign QR codes are functionally distinct from admission QR codes. A campaign
+link carries an opaque HMAC token derived from its code - never a discount
+amount - resolved by SHA-256 digest lookup, while admission tokens are
+Django-signed ticket identifiers under a separate salt. Generating the QR
+again preserves existing campaign links. The admission and verification
+endpoints reject a campaign token outright.
+`FRONTEND_BASE_URL` selects the frontend origin for `/c/{token}` redirects
+(`http://localhost:5173` in local development; HTTPS is required outside debug).
+The frontend `/events/{id}` screen must prefill the promo code from its query
+string and call `POST /orders/{id}/preview` before checkout.
+
+This API performs no real charge. The client-selected outcome exists only for
+the demo. A real provider requires server-verified payment confirmation.
+
+## Admission tickets
+
+| Method and path | Behavior |
+| --- | --- |
+| GET `/tickets/{id}` | Purchaser, event owner or platform admin only |
+| GET `/tickets/{id}/qr` | Same authorization; SVG QR image, private/no-store |
+| POST `/tickets/verify` | Event owner, assigned Event Admin with `can_check_in`, or platform admin sends `{qr_token: "scanned text"}`; returns `{valid, ticket}` |
+| POST `/tickets/check-in` | Same event-scoped permission; atomically marks checked_in |
+| POST `/tickets/{id}/verify` | Same verification, additionally binds token to numeric ID |
+| POST `/tickets/{id}/check-in` | Same check-in, additionally binds token to numeric ID |
+
+Ticket response contains id, identifier (UUID), event, ticket_type, status,
+issued_at, checked_in_at, qr_token. The QR encodes a UUID signed with a dedicated
+admission salt. It is an admission credential: keep it private. Unpublishing an
+event stops sales but does not cancel already-issued tickets. Verification is
+read-only; check-in rejects a repeated scan with 409 and records operator/time.
+There is no check-in time window in the MVP; authorized staff may test
+admission before the event. Individual holder details and undo are deferred.
+
+## Errors and pagination
+
+400 invalid data or QR, 401 missing/invalid authentication, 403 missing organizer
+capability, 404 missing/inaccessible record, 409 unavailable inventory or invalid
+state, 429 auth throttle. Errors use DRF field errors or `{detail: ...}`.
+Lists use `{count, next, previous, results}` with 20 items/page and `?page=2`.
+Authenticated clients must not cache/share private ticket or token responses.
+
+## Run and verify
+
+```sh
+docker compose up --build -d --wait
+docker compose exec -T web python manage.py test --noinput
+docker compose exec -T web python demo_mvp.py
+```
+
+The demo makes real HTTP requests, creates two fresh accounts and a published
+event, purchases a ticket, verifies it, checks it in and confirms duplicate
+check-in is rejected. It leaves those demo records in the local database.
+It prints record IDs, never credentials. Run `python backend/demo_mvp.py`
+from the host too (Python 3.11+); `--base-url` selects another local API port.
+
+Existing Docker Compose is a local development deployment. No public host has
+been deployed. Production requires a private key, TLS, production WSGI server,
+explicit hosts, shared throttling and database backups. Keep API and frontend
+on the same origin via a proxy, or configure an explicit CORS allowlist during
+frontend integration. Django admin retains its own session authentication.
