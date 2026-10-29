@@ -12,11 +12,13 @@ function Ticket() {
   const [event, setEvent] = useState(undefined) // null = no longer public
   const [typeName, setTypeName] = useState(null)
   const [qrUrl, setQrUrl] = useState(null)
+  const [pdfUrl, setPdfUrl] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     let active = true
     let objectUrl = null
+    let pdfObjectUrl = null
     api(`/tickets/${id}`)
       .then((data) => {
         if (!active) return
@@ -35,9 +37,17 @@ function Ticket() {
         else URL.revokeObjectURL(objectUrl)
       })
       .catch(() => {})
+    api(`/tickets/${id}/pdf`, { as: 'blob' })
+      .then((blob) => {
+        pdfObjectUrl = URL.createObjectURL(blob)
+        if (active) setPdfUrl(pdfObjectUrl)
+        else URL.revokeObjectURL(pdfObjectUrl)
+      })
+      .catch(() => {})
     return () => {
       active = false
       if (objectUrl) URL.revokeObjectURL(objectUrl)
+      if (pdfObjectUrl) URL.revokeObjectURL(pdfObjectUrl)
     }
   }, [id])
 
@@ -79,6 +89,12 @@ function Ticket() {
         <a href={qrUrl} download={`biletflow-ticket-${ticket.id}.svg`}
           className="mt-6 inline-block rounded bg-black px-5 py-2 text-white">
           Download QR
+        </a>
+      )}
+      {pdfUrl && (
+        <a href={pdfUrl} download={`biletflow-ticket-${ticket.id}.pdf`}
+          className="ml-3 mt-6 inline-block rounded bg-emerald-800 px-5 py-2 text-white">
+          Download printable PDF
         </a>
       )}
     </main>

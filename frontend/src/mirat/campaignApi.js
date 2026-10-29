@@ -33,7 +33,7 @@ export function createCampaignApi(storage, transport = fetch) {
     if (saved) save(JSON.parse(saved))
   } catch { clear() }
 
-  async function send(path, body, access) {
+  async function send(path, body, access, as = 'json') {
     let response
     try {
       response = await transport(`/api${path}`, {
@@ -44,6 +44,7 @@ export function createCampaignApi(storage, transport = fetch) {
       })
     } catch { throw new CampaignError('Нет связи с сервером. Проверьте подключение.') }
     if (response.status === 204) return null
+    if (response.ok && as === 'blob') return response.blob()
     let data
     try { data = await response.json() } catch { throw new CampaignError('Сервер вернул неожиданный ответ.', response.status) }
     if (!response.ok) throw new CampaignError(
@@ -68,15 +69,15 @@ export function createCampaignApi(storage, transport = fetch) {
     }
     return renewal
   }
-  async function request(path, body) {
+  async function request(path, body, as = 'json') {
     if (!tokens) throw new CampaignError('Войдите в аккаунт организатора.', 401)
     const started = version
     const access = tokens.access
-    try { return await send(path, body, access) } catch (error) {
+    try { return await send(path, body, access, as) } catch (error) {
       if (error.status !== 401 || started !== version) throw error
       if (tokens?.access === access) await refresh()
       if (!tokens || started !== version) throw new CampaignError('Войдите снова.', 401)
-      try { return await send(path, body, tokens.access) } catch (failure) {
+      try { return await send(path, body, tokens.access, as) } catch (failure) {
         if (failure.status === 401 && started === version) clear()
         throw failure
       }
@@ -97,6 +98,7 @@ export function createCampaignApi(storage, transport = fetch) {
   }
   return {
     request, logout,
+    blob(path) { return request(path, undefined, 'blob') },
     async restore() { return tokens ? me() : null },
     async login(email, password) {
       clear()

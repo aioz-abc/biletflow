@@ -14,6 +14,25 @@ function restore() {
   return initialSession
 }
 
+function CampaignQr({ campaign }) {
+  const [url, setUrl] = useState('')
+  const [error, setError] = useState('')
+  const [loading, setLoading] = useState(false)
+  useEffect(() => () => { if (url) URL.revokeObjectURL(url) }, [url])
+  async function show() {
+    if (url) { URL.revokeObjectURL(url); setUrl(''); return }
+    setLoading(true); setError('')
+    try { setUrl(URL.createObjectURL(await api.blob(`/campaigns/${campaign.id}/qr`))) }
+    catch (failure) { setError(failure.message) }
+    finally { setLoading(false) }
+  }
+  return <div className="mw-campaign-qr">
+    <button type="button" className="mw-secondary" disabled={loading} onClick={show}>{url ? 'Скрыть QR' : loading ? 'Загружаем…' : 'Показать Campaign QR'}</button>
+    {error && <small role="alert">{error}</small>}
+    {url && <div className="mw-campaign-qr-card"><strong>CAMPAIGN LINK · НЕ ВХОДНОЙ БИЛЕТ</strong><img src={url} alt={`Campaign QR для ${campaign.name}`} /><a className="mw-button" href={url} download={`biletflow-campaign-${campaign.id}.svg`}>Скачать Campaign QR</a><small>Сканирование откроет страницу события и применит промокод.</small></div>}
+  </div>
+}
+
 function CampaignEditor({ event, onFailure }) {
   const [data, setData] = useState(null)
   const [fetching, setFetching] = useState(true)
@@ -89,7 +108,7 @@ function CampaignEditor({ event, onFailure }) {
           <button type="submit">{busy ? 'Создаём…' : 'Создать кампанию'}</button>
         </fieldset>
       </form><section className="mw-panel"><h2>Условия кампании</h2><p>После сохранения сервер выдаст промокод. Новая кампания включена; даты определяют период её действия.</p><p>Фиксированная скидка вводится в тенге. Окончательную скидку и ограничения проверяет сервер при оформлении заказа.</p><p>Смена события сбросит незаполненную форму.</p></section></div>
-      <section className="mw-panel"><div className="mw-account"><h2>Сохранённые кампании</h2><button disabled={busy || fetching} onClick={refreshList}>Обновить список</button></div>{data.campaigns.length === 0 ? <p>У этого события пока нет кампаний.</p> : <div className="mw-table"><table><thead><tr><th>Название / ID</th><th>Промокод</th><th>Скидка</th><th>Период</th><th>Типы билетов</th><th>Лимит</th></tr></thead><tbody>{data.campaigns.map(campaign => <tr key={campaign.id}><td>{campaign.name} · #{campaign.id}<br />{campaign.enabled ? 'Включена' : 'Отключена'}</td><td>{campaign.codes.map(code => code.code).join(', ')}</td><td>{campaign.discount_type === 'percent' ? `${campaign.discount_value}%` : money(campaign.discount_value)}</td><td>{campaign.starts_at ? new Date(campaign.starts_at).toLocaleString('ru-KZ') : 'Без начала'} — {campaign.ends_at ? new Date(campaign.ends_at).toLocaleString('ru-KZ') : 'Без окончания'}</td><td>{campaign.ticket_types.length ? campaign.ticket_types.map(id => data.types.find(type => type.id === id)?.name || `#${id}`).join(', ') : 'Все'}</td><td>{campaign.max_redemptions ?? 'Без ограничения'}</td></tr>)}</tbody></table></div>}</section>
+      <section className="mw-panel"><div className="mw-account"><h2>Сохранённые кампании</h2><button disabled={busy || fetching} onClick={refreshList}>Обновить список</button></div>{data.campaigns.length === 0 ? <p>У этого события пока нет кампаний.</p> : <div className="mw-table"><table><thead><tr><th>Название / ID</th><th>Промокод</th><th>Скидка</th><th>Период</th><th>Типы билетов</th><th>Лимит</th><th>Campaign QR</th></tr></thead><tbody>{data.campaigns.map(campaign => <tr key={campaign.id}><td>{campaign.name} · #{campaign.id}<br />{campaign.enabled ? 'Включена' : 'Отключена'}</td><td>{campaign.codes.map(code => code.code).join(', ')}</td><td>{campaign.discount_type === 'percent' ? `${campaign.discount_value}%` : money(campaign.discount_value)}</td><td>{campaign.starts_at ? new Date(campaign.starts_at).toLocaleString('ru-KZ') : 'Без начала'} — {campaign.ends_at ? new Date(campaign.ends_at).toLocaleString('ru-KZ') : 'Без окончания'}</td><td>{campaign.ticket_types.length ? campaign.ticket_types.map(id => data.types.find(type => type.id === id)?.name || `#${id}`).join(', ') : 'Все'}</td><td>{campaign.max_redemptions ?? 'Без ограничения'}</td><td><CampaignQr campaign={campaign} /></td></tr>)}</tbody></table></div>}</section>
     </>}
   </>
 }

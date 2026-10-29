@@ -308,6 +308,22 @@ endpoints reject a campaign token outright.
 The frontend `/events/{id}` screen must prefill the promo code from its query
 string and call `POST /orders/{id}/preview` before checkout.
 
+## Printable tickets
+
+| Method and path | Behavior |
+| --- | --- |
+| GET `/tickets/{id}/pdf` | Purchaser, event organizer or platform admin downloads the canonical ticket as a printable PDF |
+
+The PDF is rendered server-side from the current ticket, order, event and ticket-type
+records. It contains the event name, local date/time, venue, ticket type, ticket ID,
+current ticket status and the same signed admission token as the protected SVG QR
+endpoint. It contains no payment-card data. Responses are private, non-cacheable
+attachments. Unrelated users receive 404, matching the other protected ticket views.
+
+The document explicitly labels its QR as an admission ticket. Campaign QR downloads
+are separately labelled `campaign-link` in the response header and the organizer UI,
+so promotional links cannot be presented as entrance tickets.
+
 This API performs no real charge. The client-selected outcome exists only for
 the demo. A real provider requires server-verified payment confirmation.
 

@@ -28,6 +28,7 @@ urlpatterns = [
     path("orders/<int:pk>/refund", views.RefundOrder.as_view()),
     path("tickets/<int:pk>", views.TicketDetail.as_view()),
     path("tickets/<int:pk>/qr", views.TicketQR.as_view()),
+    path("tickets/<int:pk>/pdf", views.TicketPDF.as_view()),
     path("tickets/<int:pk>/verify", views.VerifyTicket.as_view()),
     path("tickets/<int:pk>/check-in", views.CheckIn.as_view()),
     path("support-cases", views.SupportCaseList.as_view()),
