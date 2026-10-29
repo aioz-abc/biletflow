@@ -1,27 +1,26 @@
 # Mirat — Admin + Analytics Developer
 
 Owns: the admin interface, promotional campaigns, basic reporting,
-organizer event history/audit trail, and printable tickets. Living in
-`admin/` (React + Tailwind), plus backend endpoints you'll need
-Nursat/Aizhan's help exposing.
+organizer event history/audit trail, and printable tickets. These screens
+live as dedicated routes and components in the shared `frontend/` React app,
+plus backend endpoints you'll need Nursat/Aizhan's help exposing.
 
 ## Phase 1 (Sep 8–14) — Setup & Planning 📍 Report 1 (Sep 14)
 
-- Scaffold the admin React app in `admin/` (can share components/config
-  with Anvar's `web/` app if useful, but keep it a separate app per
-  `TEAM.md`'s folder structure).
+- Scaffold the admin routes, layout, and placeholder pages in the existing
+  `frontend/` app; coordinate route and shared-component ownership with Anvar.
 - Sketch wireframes for: admin login, platform-admin dashboard (search
   users/events/orders), organizer promo-campaign creation, organizer
   analytics dashboard, organizer event-history view.
 - Start drafting the Admin + Analytics + Promo Codes sections of
   `docs/API_CONTRACT.md`.
-- **Report 1 deliverable:** admin app scaffold running, wireframes for
-  the above screens.
+- **Report 1 deliverable:** admin routes running in the frontend app,
+  wireframes for the above screens.
 
 ## Phase 2 (Sep 15–28) — Admin auth & shell 📍 Report 2 (Sep 28)
 
 - Build the admin login screen against Nursat's auth API (Platform Admin
-  role) and the basic dashboard shell/navigation.
+  role) and the basic dashboard shell/navigation inside `frontend/`.
 - **Report 2 deliverable:** platform admin can log in and see an empty
   dashboard shell.
 

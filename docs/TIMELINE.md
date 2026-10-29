@@ -1,7 +1,7 @@
 # BiletFlow — 10-Week Delivery Timeline
 
 Start: Sep 8, 2026 · Deadline: Nov 16, 2026 · Stack: Django + DRF + PostgreSQL
-(backend), React + Tailwind (web + admin), React Native (mobile), Docker.
+(backend), React + Tailwind (one shared frontend), React Native (mobile), Docker.
 
 Report checkpoints: **Sep 14 · Sep 28 · Oct 12 · Oct 26 · Nov 9 · Nov 16 (final)**
 
@@ -23,7 +23,7 @@ building in parallel, and review each other's PRs where you can.
 | Phase | Dates | Focus | Report |
 |-------|-------|-------|--------|
 | 1 | Sep 8–14 | Stack finalized, wireframes, API contract v1, repo/app scaffolding for everyone | 📍 **Sep 14** — setup/planning report, no features expected yet |
-| 2 | Sep 15–28 | Auth end-to-end (backend+web+admin+mobile) + event creation + CI pipeline | 📍 **Sep 28** — demo: register/login + create an event |
+| 2 | Sep 15–28 | Auth end-to-end (backend+frontend+mobile) + event creation + CI pipeline | 📍 **Sep 28** — demo: register/login + create an event |
 | 3 | Sep 29–Oct 12 | Ticket types & inventory, orders, sandboxed checkout, QR ticket generation | 📍 **Oct 12** — demo: select ticket → simulated checkout → QR ticket issued |
 | 4 | Oct 13–26 | Printable PDF tickets, promo codes + Campaign QR, refunds, mobile check-in app, support chat | 📍 **Oct 26** — demo: promo code → checkout → QR ticket → mobile scan/check-in |
 | 5 | Oct 27–Nov 9 | Admin analytics dashboard, organizer history/audit trail, full integration pass | 📍 **Nov 9** — demo: admin panel live, whole system connected |

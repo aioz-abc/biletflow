@@ -1,0 +1,413 @@
+from collections.abc import Mapping
+
+from django.core import signing
+from django.utils import timezone
+from rest_framework import serializers
+
+from accounts.serializers import StrictSerializer
+
+from .models import (
+    AuditLog,
+    Event,
+    Order,
+    OrderItem,
+    PromoCode,
+    PromotionalCampaign,
+    Refund,
+    StaffAssignment,
+    SupportCase,
+    SupportMessage,
+    Ticket,
+    TicketType,
+)
+
+
+class StrictModelSerializer(serializers.ModelSerializer):
+    def to_internal_value(self, data):
+        if not isinstance(data, Mapping):
+            return super().to_internal_value(data)
+        writable = {name for name, field in self.fields.items() if not field.read_only}
+        unknown = set(data) - writable
+        if unknown:
+            raise serializers.ValidationError(
+                {key: "Unknown or read-only field." for key in unknown}
+            )
+        return super().to_internal_value(data)
+
+
+class EventSerializer(StrictModelSerializer):
+    capacity = serializers.IntegerField(min_value=1, max_value=1000000)
+    images = serializers.ListField(
+        child=serializers.URLField(max_length=500), required=False, max_length=10
+    )
+
+    class Meta:
+        model = Event
+        fields = [
+            "id",
+            "organizer",
+            "title",
+            "description",
+            "venue",
+            "category",
+            "images",
+            "starts_at",
+            "ends_at",
+            "capacity",
+            "visibility",
+            "refund_policy",
+            "published",
+            "suspended_at",
+            "suspension_reason",
+        ]
+        read_only_fields = ["id", "organizer", "published", "suspended_at", "suspension_reason"]
+
+    def validate(self, attrs):
+        start = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
+        end = attrs.get("ends_at", getattr(self.instance, "ends_at", None))
+        if start and end and end <= start:
+            raise serializers.ValidationError({"ends_at": "Must be after starts_at."})
+        if "starts_at" in attrs and start <= timezone.now():
+            raise serializers.ValidationError({"starts_at": "Must be in the future."})
+        return attrs
+
+
+class TicketTypeSerializer(StrictModelSerializer):
+    price_minor = serializers.IntegerField(min_value=0, max_value=1000000000, required=False)
+    quantity = serializers.IntegerField(min_value=0, max_value=1000000)
+    max_per_order = serializers.IntegerField(min_value=1, max_value=100, required=False)
+    available = serializers.SerializerMethodField()
+    stats = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TicketType
+        fields = [
+            "id",
+            "event",
+            "name",
+            "price_minor",
+            "quantity",
+            "max_per_order",
+            "sales_start",
+            "sales_end",
+            "hidden",
+            "available",
+            "stats",
+        ]
+        read_only_fields = ["id", "event", "available", "stats"]
+
+    def get_stats(self, obj):
+        # Sales counts are organizer data: attendees and anonymous visitors get null.
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return None
+        if not (user.is_superuser or obj.event.organizer.user_id == user.pk):
+            return None
+        from .services import ticket_type_stats
+
+        return ticket_type_stats(obj)
+
+    def get_available(self, obj):
+        from .services import reserved
+
+        return max(
+            0,
+            min(
+                obj.quantity - reserved(obj.event_id, obj.pk),
+                obj.event.capacity - reserved(obj.event_id),
+            ),
+        )
+
+    def validate(self, attrs):
+        start = attrs.get("sales_start", getattr(self.instance, "sales_start", None))
+        end = attrs.get("sales_end", getattr(self.instance, "sales_end", None))
+        if start and end and end <= start:
+            raise serializers.ValidationError({"sales_end": "Must be after sales_start."})
+        return attrs
+
+
+def qr_token(ticket):
+    return signing.Signer(salt="biletflow.admission.v1").sign(str(ticket.identifier))
+
+
+class TicketSerializer(serializers.ModelSerializer):
+    qr_token = serializers.SerializerMethodField()
+    event = serializers.IntegerField(source="order_item.order.event_id")
+    ticket_type = serializers.IntegerField(source="order_item.ticket_type_id")
+
+    class Meta:
+        model = Ticket
+        fields = [
+            "id",
+            "identifier",
+            "event",
+            "ticket_type",
+            "status",
+            "issued_at",
+            "checked_in_at",
+            "qr_token",
+        ]
+
+    def get_qr_token(self, obj):
+        return qr_token(obj)
+
+
+class ItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrderItem
+        fields = ["ticket_type", "quantity", "unit_price_minor"]
+
+
+class OrderSerializer(serializers.ModelSerializer):
+    items = ItemSerializer(many=True)
+    tickets = serializers.SerializerMethodField()
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "event",
+            "status",
+            "subtotal_minor",
+            "discount_minor",
+            "total_minor",
+            "currency",
+            "expires_at",
+            "created_at",
+            "confirmed_at",
+            "items",
+            "tickets",
+        ]
+
+    def get_status(self, obj):
+        return (
+            "expired"
+            if obj.status == "pending" and obj.expires_at <= timezone.now()
+            else obj.status
+        )
+
+    def get_tickets(self, obj):
+        return TicketSerializer(
+            Ticket.objects.filter(order_item__order=obj).select_related("order_item__order"),
+            many=True,
+        ).data
+
+
+class ReserveItemSerializer(StrictSerializer):
+    ticket_type = serializers.IntegerField(min_value=1)
+    quantity = serializers.IntegerField(min_value=1, max_value=100)
+
+
+class ReserveSerializer(StrictSerializer):
+    event = serializers.IntegerField(min_value=1)
+    items = ReserveItemSerializer(many=True, allow_empty=False, max_length=20)
+
+    def validate_items(self, items):
+        if len({item["ticket_type"] for item in items}) != len(items):
+            raise serializers.ValidationError("Duplicate ticket types.")
+        if sum(item["quantity"] for item in items) > 100:
+            raise serializers.ValidationError("At most 100 tickets per order.")
+        return items
+
+
+class CheckoutSerializer(StrictSerializer):
+    outcome = serializers.ChoiceField(choices=["success", "failure"])
+    promo_code = serializers.CharField(max_length=32, required=False, allow_blank=False)
+
+
+class PreviewSerializer(StrictSerializer):
+    promo_code = serializers.CharField(max_length=32, required=False, allow_blank=False)
+
+
+class PublishSerializer(StrictSerializer):
+    published = serializers.BooleanField()
+
+
+class QRSerializer(StrictSerializer):
+    qr_token = serializers.CharField(max_length=256)
+
+
+class RefundSerializer(serializers.ModelSerializer):
+    order = serializers.IntegerField(source="payment.order_id", read_only=True)
+
+    class Meta:
+        model = Refund
+        fields = ["id", "order", "amount_minor", "initiated_by", "created_at"]
+
+
+class AuditLogSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuditLog
+        fields = [
+            "id",
+            "event",
+            "actor",
+            "action",
+            "entity_type",
+            "entity_id",
+            "description",
+            "created_at",
+        ]
+
+
+class PromoCodeSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PromoCode
+        fields = ["id", "code"]
+
+
+class CampaignSerializer(StrictModelSerializer):
+    discount_value = serializers.IntegerField(min_value=1, max_value=1000000000)
+    codes = PromoCodeSerializer(many=True, read_only=True)
+    report = serializers.SerializerMethodField()
+
+    class Meta:
+        model = PromotionalCampaign
+        fields = [
+            "id",
+            "event",
+            "name",
+            "discount_type",
+            "discount_value",
+            "ticket_types",
+            "starts_at",
+            "ends_at",
+            "max_redemptions",
+            "enabled",
+            "created_at",
+            "codes",
+            "report",
+        ]
+        read_only_fields = ["id", "event", "created_at", "codes", "report"]
+
+    def validate(self, attrs):
+        start = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
+        end = attrs.get("ends_at", getattr(self.instance, "ends_at", None))
+        if start and end and end <= start:
+            raise serializers.ValidationError({"ends_at": "Must be after starts_at."})
+        discount_type = attrs.get("discount_type", getattr(self.instance, "discount_type", None))
+        discount_value = attrs.get("discount_value", getattr(self.instance, "discount_value", 0))
+        if discount_type == "percent" and discount_value > 100:
+            raise serializers.ValidationError({"discount_value": "Percent cannot exceed 100."})
+        event = self.context.get("event")
+        kinds = attrs.get("ticket_types") or []
+        if event and any(kind.event_id != event.pk for kind in kinds):
+            raise serializers.ValidationError(
+                {"ticket_types": "Ticket types must belong to this event."}
+            )
+        return attrs
+
+    def get_report(self, obj):
+        # SRS 4.14 campaign reporting: redemptions, orders, tickets sold, gross, discount, net.
+        redemptions = list(obj.redemptions.select_related("order"))
+        orders = [r.order for r in redemptions]
+        gross = sum(order.subtotal_minor for order in orders)
+        discount = sum(r.discount_minor for r in redemptions)
+        refunds = sum(
+            Refund.objects.filter(payment__order__in=orders).values_list("amount_minor", flat=True)
+        )
+        return {
+            "redemptions": len(redemptions),
+            "orders": len({order.pk for order in orders}),
+            "tickets_sold": Ticket.objects.filter(
+                order_item__order__in=orders, status__in=["valid", "checked_in"]
+            ).count(),
+            "gross_minor": gross,
+            "discount_minor": discount,
+            "refund_minor": refunds,
+            "net_minor": gross - discount - refunds,
+        }
+
+
+class CampaignLinkSerializer(StrictSerializer):
+    token = serializers.CharField(max_length=128)
+
+
+class StaffAssignmentSerializer(StrictModelSerializer):
+    email = serializers.EmailField(write_only=True)
+    user_email = serializers.EmailField(source="user.email", read_only=True)
+    can_check_in = serializers.BooleanField(default=True)
+    can_manage_support = serializers.BooleanField(default=False)
+
+    class Meta:
+        model = StaffAssignment
+        fields = [
+            "id",
+            "event",
+            "user",
+            "email",
+            "user_email",
+            "can_check_in",
+            "can_manage_support",
+        ]
+        read_only_fields = ["id", "event", "user", "user_email"]
+
+
+class SupportMessageSerializer(serializers.ModelSerializer):
+    author_email = serializers.EmailField(source="author.email", read_only=True)
+
+    class Meta:
+        model = SupportMessage
+        fields = ["id", "case", "author", "author_email", "body", "created_at"]
+
+
+class SupportCaseSerializer(serializers.ModelSerializer):
+    requester_email = serializers.EmailField(source="requester.email", read_only=True)
+    assigned_to_email = serializers.EmailField(
+        source="assigned_to.email", read_only=True, default=None
+    )
+
+    class Meta:
+        model = SupportCase
+        fields = [
+            "id",
+            "kind",
+            "category",
+            "subject",
+            "status",
+            "requester",
+            "requester_email",
+            "event",
+            "order",
+            "ticket",
+            "assigned_to",
+            "assigned_to_email",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class SupportCaseDetailSerializer(SupportCaseSerializer):
+    messages = SupportMessageSerializer(many=True, read_only=True)
+
+    class Meta(SupportCaseSerializer.Meta):
+        fields = SupportCaseSerializer.Meta.fields + ["messages"]
+
+
+class OpenSupportCaseSerializer(StrictSerializer):
+    category = serializers.ChoiceField(
+        choices=list(
+            dict.fromkeys(SupportCase.ATTENDEE_CATEGORIES + SupportCase.PLATFORM_CATEGORIES)
+        )
+    )
+    subject = serializers.CharField(max_length=200)
+    message = serializers.CharField(max_length=5000)
+    event = serializers.IntegerField(min_value=1, required=False)
+    order = serializers.IntegerField(min_value=1, required=False)
+    ticket = serializers.IntegerField(min_value=1, required=False)
+
+
+class SupportReplySerializer(StrictSerializer):
+    body = serializers.CharField(max_length=5000)
+
+
+class SupportCaseUpdateSerializer(StrictSerializer):
+    status = serializers.ChoiceField(choices=SupportCase.STATUSES, required=False)
+    assigned_to = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Provide status and/or assigned_to.")
+        return attrs
