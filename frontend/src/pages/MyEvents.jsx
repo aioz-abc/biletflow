@@ -18,7 +18,7 @@ function MyEvents() {
   }, [])
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
+    <main className="max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">My events</h1>
         <Link to="/organizer/events/new" className="rounded bg-black px-4 py-2 text-white">
@@ -42,6 +42,7 @@ function MyEvents() {
                 </span>
               </span>
               <span className="flex gap-4 text-sm">
+                <Link to={`/organizer/events/${ev.id}`} className="text-indigo-600 underline">Sales</Link>
                 <Link to={`/organizer/events/${ev.id}/edit`} className="text-indigo-600 underline">
                   Edit &amp; tickets
                 </Link>

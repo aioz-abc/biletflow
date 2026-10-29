@@ -4,6 +4,8 @@ import RequireAuth from "./auth/RequireAuth.jsx";
 import RequireOrganizer from "./auth/RequireOrganizer.jsx";
 import Account from "./pages/Account.jsx";
 import Checkout from "./pages/Checkout.jsx";
+import Dashboard from "./pages/Dashboard.jsx";
+import EventSales from "./pages/EventSales.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
@@ -13,6 +15,7 @@ import EventDetail from "./pages/EventDetail.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
 import Ticket from "./pages/Ticket.jsx";
+import OrganizerLayout from "./components/OrganizerLayout.jsx";
 
 function App() {
   const { user, isOrganizer, logout } = useAuth();
@@ -38,8 +41,8 @@ function App() {
             )}
 
             {isOrganizer && (
-              <Link to="/organizer/events" className="text-gray-600 hover:text-black">
-                My Events
+              <Link to="/organizer" className="text-gray-600 hover:text-black">
+                Dashboard
               </Link>
             )}
 
@@ -73,24 +76,14 @@ function App() {
         <Route path="/checkout/:orderId" element={<RequireAuth><Checkout /></RequireAuth>} />
         <Route path="/tickets/:id" element={<RequireAuth><Ticket /></RequireAuth>} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
-        <Route path="/organizer/events" element={<RequireOrganizer><MyEvents /></RequireOrganizer>} />
-        {/* Keys: leaving an edit page for "new" must start from an empty form */}
-        <Route
-          path="/organizer/events/new"
-          element={
-            <RequireOrganizer>
-              <CreateEvent key="new" />
-            </RequireOrganizer>
-          }
-        />
-        <Route
-          path="/organizer/events/:id/edit"
-          element={
-            <RequireOrganizer>
-              <CreateEvent key="edit" />
-            </RequireOrganizer>
-          }
-        />
+        <Route path="/organizer" element={<RequireOrganizer><OrganizerLayout /></RequireOrganizer>}>
+          <Route index element={<Dashboard />} />
+          <Route path="events" element={<MyEvents />} />
+          {/* Keys: leaving an edit page for "new" must start from an empty form */}
+          <Route path="events/new" element={<CreateEvent key="new" />} />
+          <Route path="events/:id" element={<EventSales />} />
+          <Route path="events/:id/edit" element={<CreateEvent key="edit" />} />
+        </Route>
       </Routes>
     </div>
   );
