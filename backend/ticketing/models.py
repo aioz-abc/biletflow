@@ -45,6 +45,8 @@ class StaffAssignment(models.Model):
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="staff_assignments"
     )
     can_check_in = models.BooleanField(default=True)
+    # Lets an Event Admin see and answer this event's attendee support cases (SRS 4.13).
+    can_manage_support = models.BooleanField(default=False)
 
     class Meta:
         constraints = [
@@ -219,3 +221,68 @@ class AuditLog(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-pk"]
+
+
+class SupportCase(models.Model):
+    ATTENDEE_CATEGORIES = (
+        "ticket_delivery",
+        "payment",
+        "refund",
+        "seating",
+        "event_information",
+        "check_in",
+        "account",
+        "technical",
+    )
+    # Organizer-to-platform cases (SRS 4.13) cover account, activation, payment, technical.
+    PLATFORM_CATEGORIES = ("account", "activation", "payment", "technical")
+    STATUSES = ("open", "in_progress", "waiting_for_customer", "resolved")
+
+    requester = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="support_cases"
+    )
+    kind = models.CharField(max_length=8, choices=[(v, v) for v in ("attendee", "platform")])
+    category = models.CharField(
+        max_length=20,
+        choices=[(v, v) for v in dict.fromkeys(ATTENDEE_CATEGORIES + PLATFORM_CATEGORIES)],
+    )
+    subject = models.CharField(max_length=200)
+    status = models.CharField(max_length=20, choices=[(v, v) for v in STATUSES], default="open")
+    event = models.ForeignKey(
+        Event, null=True, blank=True, on_delete=models.PROTECT, related_name="support_cases"
+    )
+    order = models.ForeignKey(
+        Order, null=True, blank=True, on_delete=models.PROTECT, related_name="support_cases"
+    )
+    ticket = models.ForeignKey(
+        Ticket, null=True, blank=True, on_delete=models.PROTECT, related_name="support_cases"
+    )
+    assigned_to = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="assigned_support_cases",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    # Bumped on every message so inboxes can sort by latest activity.
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-pk"]
+        constraints = [
+            models.CheckConstraint(
+                condition=Q(kind="platform") | Q(event__isnull=False),
+                name="attendee_case_has_event",
+            ),
+        ]
+
+
+class SupportMessage(models.Model):
+    case = models.ForeignKey(SupportCase, on_delete=models.PROTECT, related_name="messages")
+    author = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.PROTECT)
+    body = models.TextField(max_length=5000)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["created_at", "pk"]

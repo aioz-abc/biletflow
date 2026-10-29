@@ -11,7 +11,7 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from qrcode.image.svg import SvgPathImage
 from rest_framework import generics, permissions
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
@@ -27,16 +27,18 @@ from .models import (
     PromoCode,
     PromotionalCampaign,
     StaffAssignment,
+    SupportMessage,
     Ticket,
     TicketType,
 )
 from .notifications import ticket_qr_svg
-from .permissions import CanCheckInEvent, scan_events
+from .permissions import CanCheckInEvent, scan_events, support_cases, visible_events
 from .serializers import (
     AuditLogSerializer,
     CampaignSerializer,
     CheckoutSerializer,
     EventSerializer,
+    OpenSupportCaseSerializer,
     OrderSerializer,
     PreviewSerializer,
     PublishSerializer,
@@ -44,6 +46,11 @@ from .serializers import (
     RefundSerializer,
     ReserveSerializer,
     StaffAssignmentSerializer,
+    SupportCaseDetailSerializer,
+    SupportCaseSerializer,
+    SupportCaseUpdateSerializer,
+    SupportMessageSerializer,
+    SupportReplySerializer,
     TicketSerializer,
     TicketTypeSerializer,
     qr_token,
@@ -53,23 +60,6 @@ from .serializers import (
 def managed_events(user):
     events = Event.objects.all()
     return events if user.is_superuser else events.filter(organizer__user=user)
-
-
-def visible_events(user):
-    # Private events are only ever visible to their owner/admin, even by direct
-    # link; unlisted events are reachable by ID/QR but excluded from the public
-    # listing (see EventList.get_queryset).
-    public = Q(
-        published=True,
-        suspended_at__isnull=True,
-        organizer__user__is_active=True,
-        visibility__in=["public", "unlisted"],
-    )
-    if user.is_authenticated:
-        if user.is_superuser:
-            return Event.objects.all()
-        public |= Q(organizer__user=user)
-    return Event.objects.filter(public)
 
 
 class EventList(generics.ListCreateAPIView):
@@ -563,3 +553,63 @@ class AdminEventSuspend(APIView):
         # Recorded in the event's own history so the organizer sees who and why (SRS 4.11).
         services.record_audit(event, request.user, action, event, reason)
         return Response(EventSerializer(event).data)
+
+
+class SupportCaseList(generics.ListAPIView):
+    """Inbox for the requester and the support side; filter by status/kind/event/assigned."""
+
+    serializer_class = SupportCaseSerializer
+
+    def get_queryset(self):
+        cases = support_cases(self.request.user).select_related("requester", "assigned_to")
+        params = self.request.query_params
+        if params.get("event") and not params["event"].isdigit():
+            raise ValidationError({"event": "Must be an event id."})
+        for field in ("status", "kind", "event"):
+            if params.get(field):
+                cases = cases.filter(**{field: params[field]})
+        if params.get("assigned") == "me":
+            cases = cases.filter(assigned_to=self.request.user)
+        elif params.get("assigned") == "none":
+            cases = cases.filter(assigned_to__isnull=True)
+        return cases
+
+    def post(self, request):
+        serializer = OpenSupportCaseSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        case = services.open_support_case(request.user, serializer.validated_data)
+        return Response(SupportCaseDetailSerializer(case).data, status=201)
+
+
+class SupportCaseDetail(APIView):
+    def get(self, request, pk):
+        case = get_object_or_404(
+            support_cases(request.user).select_related("requester", "assigned_to"), pk=pk
+        )
+        return Response(SupportCaseDetailSerializer(case).data)
+
+    def patch(self, request, pk):
+        serializer = SupportCaseUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        case = services.update_support_case(request.user, pk, serializer.validated_data)
+        return Response(SupportCaseDetailSerializer(case).data)
+
+
+class SupportCaseMessages(generics.ListAPIView):
+    # Unpaginated so clients can poll with ?after=<last message id> (SRS: REST polling).
+    serializer_class = SupportMessageSerializer
+    pagination_class = None
+
+    def get_queryset(self):
+        case = get_object_or_404(support_cases(self.request.user), pk=self.kwargs["pk"])
+        messages = SupportMessage.objects.filter(case=case).select_related("author")
+        after = self.request.query_params.get("after")
+        if after and after.isdigit():
+            messages = messages.filter(pk__gt=int(after))
+        return messages
+
+    def post(self, request, pk):
+        serializer = SupportReplySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        message = services.post_support_message(request.user, pk, serializer.validated_data["body"])
+        return Response(SupportMessageSerializer(message).data, status=201)

@@ -9,7 +9,9 @@ from django.db.models import Count, F, Q, Sum
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.utils.crypto import salted_hmac
-from rest_framework.exceptions import APIException, NotFound, ValidationError
+from rest_framework.exceptions import APIException, NotFound, PermissionDenied, ValidationError
+
+from accounts.models import User
 
 from . import notifications
 from .models import (
@@ -21,9 +23,12 @@ from .models import (
     PromoCode,
     PromoRedemption,
     Refund,
+    SupportCase,
+    SupportMessage,
     Ticket,
     TicketType,
 )
+from .permissions import can_handle_case, support_cases, visible_events
 
 
 class Conflict(APIException):
@@ -491,3 +496,130 @@ def sales_summary(event):
         "estimated_payout_minor": gross - refunds_minor - fees,
         "ticket_types": by_type,
     }
+
+
+def support_context(user, event_id=None, order_id=None, ticket_id=None):
+    """Resolve and authorize the event/order/ticket a case is opened from (SRS 4.13).
+
+    The most specific link fills in the broader ones, so a case opened from a ticket
+    page always carries its order and event too. Mismatched links are rejected.
+    """
+    ticket = order = event = None
+    if ticket_id is not None:
+        ticket = get_object_or_404(
+            Ticket.objects.select_related("order_item__order"),
+            pk=ticket_id,
+            order_item__order__purchaser=user,
+        )
+        if order_id is not None and order_id != ticket.order_item.order_id:
+            raise ValidationError({"ticket": "Ticket does not belong to this order."})
+        order_id = ticket.order_item.order_id
+    if order_id is not None:
+        order = get_object_or_404(
+            Order.objects.select_related("event"), pk=order_id, purchaser=user
+        )
+        if event_id is not None and event_id != order.event_id:
+            raise ValidationError({"order": "Order does not belong to this event."})
+        event = order.event
+    elif event_id is not None:
+        event = get_object_or_404(visible_events(user), pk=event_id)
+    return event, order, ticket
+
+
+@transaction.atomic
+def open_support_case(user, data):
+    event, order, ticket = support_context(
+        user, data.get("event"), data.get("order"), data.get("ticket")
+    )
+    if event is not None:
+        kind, categories = "attendee", SupportCase.ATTENDEE_CATEGORIES
+    elif getattr(user, "organizer_profile", None) is not None:
+        kind, categories = "platform", SupportCase.PLATFORM_CATEGORIES
+    else:
+        raise ValidationError({"event": "Open a case from an event, order or ticket."})
+    if data["category"] not in categories:
+        raise ValidationError({"category": f"Not a {kind} support category."})
+    case = SupportCase.objects.create(
+        requester=user,
+        kind=kind,
+        category=data["category"],
+        subject=data["subject"],
+        event=event,
+        order=order,
+        ticket=ticket,
+    )
+    SupportMessage.objects.create(case=case, author=user, body=data["message"])
+    if event is not None:
+        record_audit(event, user, "support.opened", case, f"Category: {case.category}.")
+        notify_support(case, event.organizer.contact_email, "New support case")
+    return case
+
+
+def handled_case(user, case_id):
+    # select_for_update cannot be combined with the DISTINCT in support_cases().
+    get_object_or_404(support_cases(user), pk=case_id)
+    return (
+        SupportCase.objects.select_for_update(of=("self",))
+        .select_related("event__organizer")
+        .get(pk=case_id)
+    )
+
+
+@transaction.atomic
+def post_support_message(user, case_id, body):
+    case = handled_case(user, case_id)
+    if case.status == "resolved":
+        raise Conflict("Case is resolved; open a new case instead.")
+    message = SupportMessage.objects.create(case=case, author=user, body=body)
+    from_requester = user.pk == case.requester_id
+    if from_requester and case.status == "waiting_for_customer":
+        change_status(case, user, "in_progress")
+    case.save(update_fields=["status", "updated_at"])
+    if not from_requester:
+        notify_support(case, case.requester.email, "New reply")
+    elif case.assigned_to_id and case.assigned_to_id != user.pk:
+        notify_support(case, case.assigned_to.email, "New reply")
+    elif case.kind == "attendee":
+        notify_support(case, case.event.organizer.contact_email, "New reply")
+    return message
+
+
+def change_status(case, actor, status):
+    old, case.status = case.status, status
+    if case.event_id:
+        record_audit(case.event, actor, "support.status_changed", case, f"{old} -> {status}")
+
+
+@transaction.atomic
+def update_support_case(user, case_id, data):
+    case = handled_case(user, case_id)
+    if not can_handle_case(user, case):
+        raise PermissionDenied("Only support staff can change status or assignment.")
+    if "assigned_to" in data:
+        assignee = data["assigned_to"]
+        if assignee is not None:
+            assignee = User.objects.filter(pk=assignee, is_active=True).first()
+            if assignee is None or not can_handle_case(assignee, case):
+                raise ValidationError({"assigned_to": "User cannot handle this case."})
+        case.assigned_to = assignee
+        if case.event_id:
+            record_audit(
+                case.event,
+                user,
+                "support.assigned",
+                case,
+                f"Assigned to {assignee.email}." if assignee else "Unassigned.",
+            )
+        if assignee and assignee.pk != user.pk:
+            notify_support(case, assignee.email, "Case assigned to you")
+    if "status" in data and data["status"] != case.status:
+        change_status(case, user, data["status"])
+        notify_support(case, case.requester.email, f"Status changed to {case.status}")
+    case.save(update_fields=["status", "assigned_to", "updated_at"])
+    return case
+
+
+def notify_support(case, recipient, summary):
+    transaction.on_commit(
+        lambda: notifications.send_support_notification(case.pk, recipient, summary)
+    )

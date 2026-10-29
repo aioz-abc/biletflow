@@ -15,6 +15,8 @@ from .models import (
     PromotionalCampaign,
     Refund,
     StaffAssignment,
+    SupportCase,
+    SupportMessage,
     Ticket,
     TicketType,
 )
@@ -327,8 +329,85 @@ class StaffAssignmentSerializer(StrictModelSerializer):
     email = serializers.EmailField(write_only=True)
     user_email = serializers.EmailField(source="user.email", read_only=True)
     can_check_in = serializers.BooleanField(default=True)
+    can_manage_support = serializers.BooleanField(default=False)
 
     class Meta:
         model = StaffAssignment
-        fields = ["id", "event", "user", "email", "user_email", "can_check_in"]
+        fields = [
+            "id",
+            "event",
+            "user",
+            "email",
+            "user_email",
+            "can_check_in",
+            "can_manage_support",
+        ]
         read_only_fields = ["id", "event", "user", "user_email"]
+
+
+class SupportMessageSerializer(serializers.ModelSerializer):
+    author_email = serializers.EmailField(source="author.email", read_only=True)
+
+    class Meta:
+        model = SupportMessage
+        fields = ["id", "case", "author", "author_email", "body", "created_at"]
+
+
+class SupportCaseSerializer(serializers.ModelSerializer):
+    requester_email = serializers.EmailField(source="requester.email", read_only=True)
+    assigned_to_email = serializers.EmailField(
+        source="assigned_to.email", read_only=True, default=None
+    )
+
+    class Meta:
+        model = SupportCase
+        fields = [
+            "id",
+            "kind",
+            "category",
+            "subject",
+            "status",
+            "requester",
+            "requester_email",
+            "event",
+            "order",
+            "ticket",
+            "assigned_to",
+            "assigned_to_email",
+            "created_at",
+            "updated_at",
+        ]
+
+
+class SupportCaseDetailSerializer(SupportCaseSerializer):
+    messages = SupportMessageSerializer(many=True, read_only=True)
+
+    class Meta(SupportCaseSerializer.Meta):
+        fields = SupportCaseSerializer.Meta.fields + ["messages"]
+
+
+class OpenSupportCaseSerializer(StrictSerializer):
+    category = serializers.ChoiceField(
+        choices=list(
+            dict.fromkeys(SupportCase.ATTENDEE_CATEGORIES + SupportCase.PLATFORM_CATEGORIES)
+        )
+    )
+    subject = serializers.CharField(max_length=200)
+    message = serializers.CharField(max_length=5000)
+    event = serializers.IntegerField(min_value=1, required=False)
+    order = serializers.IntegerField(min_value=1, required=False)
+    ticket = serializers.IntegerField(min_value=1, required=False)
+
+
+class SupportReplySerializer(StrictSerializer):
+    body = serializers.CharField(max_length=5000)
+
+
+class SupportCaseUpdateSerializer(StrictSerializer):
+    status = serializers.ChoiceField(choices=SupportCase.STATUSES, required=False)
+    assigned_to = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Provide status and/or assigned_to.")
+        return attrs

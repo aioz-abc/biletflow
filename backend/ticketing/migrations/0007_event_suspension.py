@@ -5,7 +5,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("ticketing", "0005_payment_fee"),
+        ("ticketing", "0006_support_cases"),
     ]
 
     operations = [

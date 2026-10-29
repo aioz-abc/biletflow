@@ -359,10 +359,14 @@ the event list alone is not an audit implementation.
 
 | Method | Endpoint | Description | Status |
 |--------|----------|--------------|--------|
-| POST | /support-cases | Open a support case | planned |
-| GET | /support-cases/:id | Case + message thread | planned |
-| POST | /support-cases/:id/messages | Post message | planned |
-| PATCH | /support-cases/:id | Change status/assignment | planned |
+| POST | /support-cases | Open a support case | done |
+| GET | /support-cases | Inbox with status/kind/event/assigned filters | done |
+| GET | /support-cases/:id | Case + message thread | done |
+| POST | /support-cases/:id/messages | Post message | done |
+| GET | /support-cases/:id/messages | Thread; `?after=` for polling | done |
+| PATCH | /support-cases/:id | Change status/assignment | done |
+
+Payloads and access rules: see "Support cases" in `docs/BACKEND_MVP_API.md`.
 
 ## Notes for Frontend/Mobile/Admin devs
 
