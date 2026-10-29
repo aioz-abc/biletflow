@@ -50,3 +50,20 @@
 .mw .mw-checkbox input { width: auto; }
 .mw .mw-secondary { margin: 10px; background: #edf0eb; color: #214e3e; }
 .mw-success { border-left: 4px solid #397352; }
+.mw-dashboard-link { text-align: left; color: #202820; cursor: pointer; }
+.mw-dashboard-link:hover { border-color: #397352; background: #f7faf5; }
+.mw-badge { display: inline-block; border-radius: 999px; padding: 4px 9px; background: #e8ece5; color: #3f493c; font-size: 11px; font-weight: 700; }
+.mw-badge.is-active { background: #dcefe2; color: #1f6137; }
+.mw-badge.is-suspended { background: #fbe2df; color: #8a3028; }
+.mw .mw-danger { background: #8a3028; }
+.mw-admin-cards { display: grid; gap: 14px; }
+.mw-admin-card { border: 1px solid #dce1d8; border-radius: 9px; padding: 18px; display: grid; grid-template-columns: 1fr minmax(230px, .65fr); gap: 20px; align-items: center; }
+.mw-admin-card h3 { font-size: 17px; font-weight: 650; }
+.mw-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.mw-campaign-qr { min-width: 190px; }
+.mw-campaign-qr-card { margin-top: 10px; border: 3px dashed #b7811d; background: #fff8e8; padding: 12px; text-align: center; color: #624c19; border-radius: 8px; }
+.mw-campaign-qr-card > strong { display: block; font-size: 10px; letter-spacing: .08em; }
+.mw-campaign-qr-card img { display: block; width: 170px; max-width: 100%; margin: 10px auto; background: white; padding: 8px; }
+.mw-campaign-qr-card .mw-button { font-size: 12px; padding: 8px 10px; }
+.mw-campaign-qr-card small { display: block; margin-top: 9px; }
+@media (max-width: 700px) { .mw-admin-card { grid-template-columns: 1fr; } }

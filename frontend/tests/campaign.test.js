@@ -12,7 +12,8 @@ function mock(responses, initial = null) {
     const response = responses.shift()
     assert.ok(response, `Unexpected request ${url}`)
     if (response instanceof Error) throw response
-    return new Response(response.status === 204 ? null : JSON.stringify(response.body), { status: response.status || 200 })
+    const body = response.status === 204 ? null : response.raw ?? JSON.stringify(response.body)
+    return new Response(body, { status: response.status || 200, headers: response.headers })
   })
   return { api, calls, stored: () => stored }
 }
@@ -78,4 +79,11 @@ test('logout removes local credentials even offline', async () => {
   await assert.rejects(app.api.logout())
   assert.equal(app.stored(), null)
   assert.equal(await app.api.restore(), null)
+})
+test('campaign QR is downloaded as an authenticated blob without parsing it as JSON', async () => {
+  const app = mock([{ raw: '<svg data-kind="campaign-link"></svg>', headers: { 'Content-Type': 'image/svg+xml' } }], JSON.stringify(pair))
+  const blob = await app.api.blob('/campaigns/17/qr')
+  assert.equal(await blob.text(), '<svg data-kind="campaign-link"></svg>')
+  assert.equal(app.calls[0].url, '/api/campaigns/17/qr')
+  assert.equal(app.calls[0].headers.Authorization, 'Bearer old')
 })
