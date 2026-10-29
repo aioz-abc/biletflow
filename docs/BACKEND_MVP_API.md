@@ -167,7 +167,7 @@ no periodic job is needed. API status is `pending`, `expired`, `cancelled` or
 
 Orders return id, event, status, subtotal_minor, discount_minor, total_minor,
 currency, expires_at, created_at,
-confirmed_at, items (`ticket_type`, `quantity`, `unit_price_minor`) and tickets.
+confirmed_at, items (`ticket_type`, `quantity`, `unit_price_minor`, `discount_minor`: the line's share of the order discount, summing to the order's `discount_minor`) and tickets.
 Failed simulated payment leaves a pending reservation and issues no tickets;
 retry before expiry or cancel it. Success confirms the order and issues one
 ticket per unit. Free orders use the same checkout endpoint without a Payment
