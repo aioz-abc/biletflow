@@ -29,10 +29,10 @@ function App() {
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="border-b bg-white">
-        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-3 px-6 py-4">
           <Link to="/" className="text-2xl font-bold">Begemot.com</Link>
 
-          <nav className="flex items-center gap-6">
+          <nav className="flex flex-wrap items-center gap-x-6 gap-y-2">
             <Link to="/" className="text-gray-600 hover:text-black">
               Events
             </Link>
