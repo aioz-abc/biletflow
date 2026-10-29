@@ -13,7 +13,7 @@ from django.utils import timezone
 from django.utils.html import escape
 from qrcode.image.svg import SvgPathImage
 
-from .models import Order, Ticket
+from .models import Order, SupportCase, Ticket
 
 
 def ticket_qr_svg(token):
@@ -82,3 +82,18 @@ def send_order_confirmation(order_id):
         svg = ticket_qr_svg(qr_token(ticket))
         message.attach(f"ticket-{ticket.identifier}.svg", svg, "image/svg+xml")
     message.send()
+
+
+def send_support_notification(case_id, recipient, summary):
+    """Email for new replies, assignment and status changes on a support case (SRS 4.13)."""
+    case = SupportCase.objects.select_related("event").get(pk=case_id)
+    context = f"Event: {case.event.title}\n" if case.event else "Platform support\n"
+    EmailMultiAlternatives(
+        subject=f"BiletFlow support #{case.pk}: {summary}",
+        body=(
+            f'{summary} on support case #{case.pk} "{case.subject}".\n\n'
+            f"{context}Status: {case.status}\n\n"
+            f"Open the conversation: {settings.FRONTEND_BASE_URL}/support/{case.pk}\n"
+        ),
+        to=[recipient],
+    ).send()

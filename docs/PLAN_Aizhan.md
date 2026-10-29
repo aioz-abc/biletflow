@@ -46,9 +46,8 @@ PostgreSQL.
 
 ## Phase 4 (Oct 13–26) — Refunds, promo-code backend 📍 Report 4 (Oct 26)
 
-> Delivered early, ahead of the Oct 13–26 window. Branch
-> `aizhan/phase4-refunds-promo`, stacked on the Phase 2 branch and pending
-> review and merge into `dev`.
+> Delivered early, ahead of the Oct 13–26 window, and merged into `dev`
+> (PR #6 and PR #7).
 
 - ✅ Order cancellation for free registrations and full refunds for paid
   orders (SRS 4.9) — refunded/cancelled tickets become invalid, and every
@@ -59,13 +58,18 @@ PostgreSQL.
   logic and a first-pass campaign CRUD live here.
 - Open design decisions still needing Nursat's review are listed in the
   pull request for that branch.
+- ✅ Pulled forward from Phase 5: Support Case + Support Message endpoints
+  (SRS 4.13), because Anvar's and Abylai's Phase 4 support-chat UIs need them
+  now. Branch `aizhan/support-cases`.
 - **Report 4 deliverable:** met early — promo code applies at checkout, and
-  the refund/cancel flow works and is logged.
+  the refund/cancel flow works and is logged. Support-case API is ready for
+  the web and mobile support chat.
 
 ## Phase 5 (Oct 27–Nov 9) — Support cases backend, integration 📍 Report 5 (Nov 9)
 
-- Implement Support Case + Support Message endpoints (SRS 4.13) — Anvar
-  and Abylai need these for the web and mobile support UI.
+- ✅ Support Case + Support Message endpoints (SRS 4.13) — delivered in
+  Phase 4, see above. Remaining: fix issues Anvar and Abylai find while wiring
+  the support UIs to them.
 - Join the team integration push: fix bugs found when frontend/mobile
   are wired against your real endpoints instead of mocks.
 
