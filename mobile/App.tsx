@@ -5,13 +5,13 @@ import {
   View,
   TextInput,
   TouchableOpacity,
-  Pressable,
   FlatList,
   ActivityIndicator,
   Alert,
   Platform,
 } from 'react-native';
 import ScanScreen from './ScanScreen';
+import AttendeeScreen from './AttendeeScreen';
 import { API_BASE_URL } from './config';
 
 const MOCK_ASSIGNED_EVENTS = [
@@ -21,11 +21,12 @@ const MOCK_ASSIGNED_EVENTS = [
 ];
 
 export default function App() {
-  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'EVENTS' | 'SCAN'>('LOGIN');
+  const [currentScreen, setCurrentScreen] = useState<'LOGIN' | 'EVENTS' | 'SCAN' | 'ATTENDEES'>('LOGIN');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const [selectedEvent, setSelectedEvent] = useState<string | null>(null);
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [selectedEvent, setSelectedEvent] = useState<{ id: string; title: string } | null>(null);
   const [lastScannedCode, setLastScannedCode] = useState<string | null>(null);
 
   const showAlert = (title: string, message: string) => {
@@ -45,17 +46,19 @@ export default function App() {
     setLoading(true);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/auth/login/`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: email, password }),
       });
 
+      const data = await response.json().catch(() => ({}));
+
       if (response.ok) {
+        setAuthToken(data.token || data.access || 'authenticated-user-token');
         setCurrentScreen('EVENTS');
       } else {
-        const data = await response.json().catch(() => ({}));
-        showAlert('Login Failed', data.message || 'Invalid credentials');
+        showAlert('Login Failed', data.detail || data.message || 'Invalid credentials');
       }
     } catch (err) {
       showAlert('Network Error', 'Could not reach server. Use "Dev Bypass Login" below to test navigation.');
@@ -65,24 +68,42 @@ export default function App() {
   };
 
   const handleDevBypass = () => {
+    setAuthToken('dev-bypass-token-123');
     setCurrentScreen('EVENTS');
   };
 
-  const handleOpenScanner = (eventName: string) => {
-    setSelectedEvent(eventName);
+  const handleOpenScanner = (event: { id: string; title: string }) => {
+    setSelectedEvent(event);
     setCurrentScreen('SCAN');
+  };
+
+  const handleOpenAttendees = (event: { id: string; title: string }) => {
+    setSelectedEvent(event);
+    setCurrentScreen('ATTENDEES');
   };
 
   const handleScanSuccess = (code: string) => {
     setLastScannedCode(code);
-    showAlert('QR Code Scanned', `Payload: ${code}\nEvent: ${selectedEvent}`);
+    showAlert('QR Code Scanned', `Payload: ${code}\nEvent: ${selectedEvent?.title}`);
   };
 
   if (currentScreen === 'SCAN') {
     return (
       <ScanScreen
+        authToken={authToken || 'dev-bypass-token-123'}
         onBack={() => setCurrentScreen('EVENTS')}
         onScanSuccess={handleScanSuccess}
+      />
+    );
+  }
+
+  if (currentScreen === 'ATTENDEES' && selectedEvent) {
+    return (
+      <AttendeeScreen
+        eventId={selectedEvent.id}
+        eventTitle={selectedEvent.title}
+        authToken={authToken || 'dev-bypass-token-123'}
+        onBack={() => setCurrentScreen('EVENTS')}
       />
     );
   }
@@ -92,7 +113,7 @@ export default function App() {
       <View style={styles.container}>
         <View style={styles.headerRow}>
           <Text style={styles.title}>Assigned Events</Text>
-          <TouchableOpacity onPress={() => setCurrentScreen('LOGIN')}>
+          <TouchableOpacity onPress={() => { setAuthToken(null); setCurrentScreen('LOGIN'); }}>
             <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
@@ -112,12 +133,20 @@ export default function App() {
                 <Text style={styles.eventTitle}>{item.title}</Text>
                 <Text style={styles.eventDetails}>{item.date} • {item.venue}</Text>
               </View>
-              <TouchableOpacity
-                style={styles.scanButton}
-                onPress={() => handleOpenScanner(item.title)}
-              >
-                <Text style={styles.scanButtonText}>Scan QR</Text>
-              </TouchableOpacity>
+              <View style={styles.actionGroup}>
+                <TouchableOpacity
+                  style={styles.attendeeButton}
+                  onPress={() => handleOpenAttendees(item)}
+                >
+                  <Text style={styles.attendeeButtonText}>Attendees</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.scanButton}
+                  onPress={() => handleOpenScanner(item)}
+                >
+                  <Text style={styles.scanButtonText}>Scan QR</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
         />
@@ -170,8 +199,11 @@ const styles = StyleSheet.create({
   eventCard: { backgroundColor: '#fff', padding: 15, borderRadius: 8, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, borderWidth: 1, borderColor: '#e0e0e0' },
   eventTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 5 },
   eventDetails: { color: '#666', fontSize: 14 },
-  scanButton: { backgroundColor: '#34C759', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 6, marginLeft: 10 },
-  scanButtonText: { color: '#fff', fontWeight: 'bold' },
+  actionGroup: { flexDirection: 'row', gap: 6 },
+  attendeeButton: { backgroundColor: '#007AFF', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 },
+  attendeeButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+  scanButton: { backgroundColor: '#34C759', paddingVertical: 8, paddingHorizontal: 10, borderRadius: 6 },
+  scanButtonText: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
   scanBanner: { backgroundColor: '#E3F2FD', padding: 10, borderRadius: 6, marginBottom: 15 },
   scanBannerText: { color: '#0D47A1', fontWeight: 'bold', fontSize: 12 },
 });
