@@ -201,9 +201,12 @@ real behaviour rather than an assumption.
 
 ### Delivery
 
-- **Aizhan:** `OrderItem.discount_minor` (migration, backfill, tests) and the
-  `GET /events/{id}/analytics` endpoint. First a stub that returns the agreed
-  shape with zero-filled data, so the dashboard can be built against it, then
-  the real aggregation with acceptance cases 1–10 as backend tests.
+Following the Phase 5 plans (`PLAN_Nursat.md`, `PLAN_Mirat.md`):
+
+- **Aizhan:** `OrderItem.discount_minor` (migration, backfill, tests), so each
+  ticket type's share of the discount is stored at checkout. The analytics
+  endpoint needs it for filtered revenue.
+- **Nursat:** the `GET /events/{id}/analytics` endpoint. A stub with the agreed
+  shape and zero-filled data first, so the dashboard can be built against it,
+  then the real aggregation with acceptance cases 1–10 as backend tests.
 - **Mirat:** the dashboard views, built against the stub first.
-- Dates to be agreed in the next team sync.
