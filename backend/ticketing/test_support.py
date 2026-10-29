@@ -100,6 +100,8 @@ class SupportAccessTests(SupportHelpers, TestCase):
         self.assertEqual([c["id"] for c in response.json()["results"]], [self.case])
         response = self.as_user(self.owner).get("/api/support-cases?assigned=me")
         self.assertEqual(response.json()["results"], [])
+        response = self.as_user(self.owner).get("/api/support-cases?event=abc")
+        self.assertEqual(response.status_code, 400)
 
 
 class SupportConversationTests(SupportHelpers, TestCase):

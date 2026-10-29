@@ -57,8 +57,10 @@ class EventSerializer(StrictModelSerializer):
             "visibility",
             "refund_policy",
             "published",
+            "suspended_at",
+            "suspension_reason",
         ]
-        read_only_fields = ["id", "organizer", "published"]
+        read_only_fields = ["id", "organizer", "published", "suspended_at", "suspension_reason"]
 
     def validate(self, attrs):
         start = attrs.get("starts_at", getattr(self.instance, "starts_at", None))

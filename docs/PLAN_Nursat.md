@@ -59,11 +59,12 @@ your piece a little ahead of whoever needs it next.
 
 ## Phase 4 (Oct 13–26) — Notifications, admin auth, mobile API support 📍 Report 4 (Oct 26)
 
-- Wire up simulated email notifications (registration, order, refund).
-- Support Mirat on Platform Admin permissions (suspend user/event).
-- Make sure `/tickets/:id/verify` and `/tickets/:id/check-in` are fast and
+- ✅ Wire up simulated email notifications (registration, order, refund).
+- ✅ Support Mirat on Platform Admin permissions (suspend user/event) —
+  `/admin/users`, `/admin/users/:id/suspend`, `/admin/events/:id/suspend`.
+- ✅ Make sure `/tickets/:id/verify` and `/tickets/:id/check-in` are fast and
   reliable — SRS wants check-in to complete in about 2 seconds — Abylai's
-  mobile app depends on these this phase.
+  mobile app depends on these this phase. Measured with `bench_checkin.py`.
 
 ## Phase 5 (Oct 27–Nov 9) — Integration 📍 Report 5 (Nov 9)
 

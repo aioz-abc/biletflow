@@ -22,6 +22,11 @@ class Event(models.Model):
     )
     refund_policy = models.TextField(blank=True)
     published = models.BooleanField(default=False)
+    # Set only by a platform admin (SRS 4.12). A suspended event is hidden from
+    # attendees and closed for sales, but its organizer keeps read access and
+    # already issued tickets can still be checked in.
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.CharField(max_length=300, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

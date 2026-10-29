@@ -9,7 +9,10 @@ def visible_events(user):
     # link; unlisted events are reachable by ID/QR but excluded from the public
     # listing (see EventList.get_queryset).
     public = Q(
-        published=True, organizer__user__is_active=True, visibility__in=["public", "unlisted"]
+        published=True,
+        suspended_at__isnull=True,
+        organizer__user__is_active=True,
+        visibility__in=["public", "unlisted"],
     )
     if user.is_authenticated:
         if user.is_superuser:

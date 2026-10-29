@@ -28,7 +28,7 @@ from .models import (
     Ticket,
     TicketType,
 )
-from .permissions import can_check_in, can_handle_case, support_cases, visible_events
+from .permissions import can_handle_case, support_cases, visible_events
 
 
 class Conflict(APIException):
@@ -53,6 +53,7 @@ def reserve(user, event_id, items):
         Event.objects.select_for_update(),
         pk=event_id,
         published=True,
+        suspended_at__isnull=True,
         organizer__user__is_active=True,
     )
     if event.visibility == "private" and not (
@@ -112,6 +113,7 @@ def ensure_checkout_available(user, event, order):
         raise Conflict("Order is cancelled or expired.")
     if (
         not event.published
+        or event.suspended_at
         or not event.organizer.user.is_active
         or event.starts_at <= timezone.now()
         or (
@@ -206,20 +208,23 @@ def check_qr(ticket, token):
 
 
 @transaction.atomic
-def check_in(ticket_id, user, token):
-    initial = get_object_or_404(Ticket, pk=ticket_id)
-    event = Event.objects.select_for_update().get(pk=initial.order_item.order.event_id)
-    if not can_check_in(user, event):
-        raise NotFound()
-    ticket = Ticket.objects.select_for_update().get(pk=ticket_id)
+def check_in(ticket, user, token):
+    """Admit a ticket the caller has already resolved within their scan_events()."""
     check_qr(ticket, token)
-    if ticket.status != "valid":
+    now = timezone.now()
+    # The conditional UPDATE is the whole race guard: of two concurrent scans the
+    # second re-reads the row after the first commits and matches nothing, and a
+    # refund holding the ticket lock is waited out the same way. No event lock is
+    # taken, so door scanning never queues behind ticket sales (SRS: ~2 s check-in).
+    admitted = Ticket.objects.filter(pk=ticket.pk, status="valid").update(
+        status="checked_in", checked_in_at=now, checked_in_by=user
+    )
+    if not admitted:
         raise Conflict("Ticket has already been checked in.")
     ticket.status = "checked_in"
-    ticket.checked_in_at = timezone.now()
+    ticket.checked_in_at = now
     ticket.checked_in_by = user
-    ticket.save(update_fields=["status", "checked_in_at", "checked_in_by"])
-    record_audit(event, user, "ticket.checked_in", ticket)
+    record_audit(ticket.order_item.order.event, user, "ticket.checked_in", ticket)
     return ticket
 
 
@@ -279,7 +284,12 @@ def resolve_campaign_link(token):
         link_token_digest=link_token_digest(token),
     )
     event = code.campaign.event
-    if not event.published or event.visibility == "private" or not event.organizer.user.is_active:
+    if (
+        not event.published
+        or event.suspended_at
+        or event.visibility == "private"
+        or not event.organizer.user.is_active
+    ):
         raise NotFound()
     return code
 
@@ -351,6 +361,7 @@ def cancel_order(user, order_id):
         order.status = "cancelled"
         order.save(update_fields=["status"])
         record_audit(event, user, "order.cancelled", order, "Free registration cancelled.")
+        transaction.on_commit(lambda: notifications.send_order_closed(order.pk))
         return order
     if order.status != "pending":
         raise Conflict("Order is already cancelled or refunded.")
@@ -393,6 +404,7 @@ def refund_order(user, order_id):
     record_audit(
         event, user, "order.refunded", order, f"Full refund of {payment.amount_minor} tiyn."
     )
+    transaction.on_commit(lambda: notifications.send_order_closed(order.pk))
     return order, refund
 
 

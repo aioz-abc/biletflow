@@ -84,6 +84,40 @@ def send_order_confirmation(order_id):
     message.send()
 
 
+def send_order_closed(order_id):
+    """Tell the attendee their tickets were refunded or cancelled (SRS 4.9)."""
+    order = Order.objects.select_related("event", "purchaser", "payment__refund").get(pk=order_id)
+    if order.status not in ("refunded", "cancelled"):
+        return
+    event = order.event
+    identifiers = Ticket.objects.filter(order_item__order=order).values_list(
+        "identifier", flat=True
+    )
+    if order.status == "refunded":
+        subject = f"BiletFlow: refund for {event.title}"
+        summary = (
+            f"Your BiletFlow order #{order.pk} was refunded in full: "
+            f"{money(order.payment.refund.amount_minor, order.currency)} (simulated)."
+        )
+    else:
+        subject = f"BiletFlow: registration cancelled for {event.title}"
+        summary = f"Your free registration #{order.pk} was cancelled."
+    lines = [
+        summary,
+        "",
+        f"Event: {event.title}",
+        f"When: {timezone.localtime(event.starts_at).strftime('%d.%m.%Y %H:%M')}",
+        "",
+        "These tickets are no longer valid for entry:",
+        *(f"- ticket {identifier}" for identifier in identifiers),
+        "",
+        "Demo environment: no real money was moved.",
+    ]
+    EmailMultiAlternatives(
+        subject=subject, body="\n".join(lines) + "\n", to=[order.purchaser.email]
+    ).send()
+
+
 def send_support_notification(case_id, recipient, summary):
     """Email for new replies, assignment and status changes on a support case (SRS 4.13)."""
     case = SupportCase.objects.select_related("event").get(pk=case_id)

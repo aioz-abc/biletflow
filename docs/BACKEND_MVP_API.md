@@ -240,6 +240,11 @@ An order with any `checked_in` ticket returns 409 - see the assumption note belo
 Refunded and cancelled orders stop counting toward inventory, so their seats
 return to the sellable pool, exactly as an expired or cancelled hold already does.
 
+A refund, or the cancellation of a confirmed free registration, emails the
+purchaser after the transaction commits: the refunded amount (marked simulated)
+and the ticket identifiers that are no longer valid. A repeated refund call and
+the cancellation of a pending hold send nothing.
+
 | Method and path | Behavior |
 | --- | --- |
 | GET `/events/{id}/audit-log` | Organizer/admin reads the event's append-only activity timeline |
@@ -324,6 +329,37 @@ event stops sales but does not cancel already-issued tickets. Verification is
 read-only; check-in rejects a repeated scan with 409 and records operator/time.
 There is no check-in time window in the MVP; authorized staff may test
 admission before the event. Individual holder details and undo are deferred.
+
+Scanner performance (SRS: check-in in about 2 s). The ticket, its event and
+organizer are resolved in one query; check-in is a single conditional
+`UPDATE ... WHERE status = 'valid'`, so of two simultaneous scans exactly one
+wins, and it no longer takes the event lock that ticket sales use. Verify uses
+at most 3 queries and check-in at most 6 (enforced by `test_phase4.py`).
+`python bench_checkin.py --tickets 200` measures the real HTTP path; locally
+verify + check-in together is about 11 ms p50 / 12 ms p95.
+
+## Platform admin (SRS 4.12)
+
+Platform admin is a superuser (`roles` contains `platform_admin`). Everyone
+else receives 403 on these endpoints.
+
+| Method and path | Behavior |
+| --- | --- |
+| GET `/admin/users?search=` | Users with id, email, names, is_active, date_joined, roles |
+| POST `/admin/users/{id}/suspend` | `{suspended: true/false}`; returns the user |
+| POST `/admin/events/{id}/suspend` | `{suspended: true/false, reason?}`; returns the event |
+
+A suspended user cannot log in, their current access token is rejected on the
+next request and their refresh tokens are blacklisted. A suspended organizer's
+events disappear from public listings, exactly as before via `is_active`.
+Platform admins cannot be suspended through the API.
+
+A suspended event (`suspended_at`, `suspension_reason` on the event payload)
+is hidden from attendees and its campaign links, and cannot be reserved,
+checked out or re-published (409). Its organizer still sees it with the reason.
+Tickets already issued keep working at the door. Suspension and restoration
+are written to the event's audit log with the admin as actor.
+
 
 ## Support cases
 
