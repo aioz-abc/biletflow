@@ -78,9 +78,17 @@ function Account() {
       {orders.length === 0 ? <p className="mt-2 text-gray-600">No orders yet.</p> : (
         <ul className="mt-3 divide-y rounded-xl border bg-white text-sm">
           {orders.map((o) => (
-            <li key={o.id} className="flex justify-between p-3">
+            <li key={o.id} className="flex flex-wrap justify-between gap-2 p-3">
               <span>#{o.id} · {title(o.event)} · {dateFmt.format(new Date(o.created_at))}</span>
-              <span>{o.status} · {formatMoney(o.total_minor)}</span>
+              <span>
+                {o.status} · {formatMoney(o.total_minor)}
+                {o.status !== 'pending' && (
+                  <>
+                    {' · '}
+                    <Link to={`/support/new?order=${o.id}`} className="text-indigo-600 underline">Get help</Link>
+                  </>
+                )}
+              </span>
             </li>
           ))}
         </ul>

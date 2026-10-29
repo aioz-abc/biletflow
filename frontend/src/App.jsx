@@ -13,7 +13,10 @@ import Register from "./pages/Register.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
+import NewSupportCase from "./pages/NewSupportCase.jsx";
 import ResetPassword from "./pages/ResetPassword.jsx";
+import SupportCase from "./pages/SupportCase.jsx";
+import SupportCases from "./pages/SupportCases.jsx";
 import Ticket from "./pages/Ticket.jsx";
 import OrganizerLayout from "./components/OrganizerLayout.jsx";
 
@@ -51,6 +54,9 @@ function App() {
                 <Link to="/account" className="text-gray-600 hover:text-black">
                   My Tickets
                 </Link>
+                <Link to="/support" className="text-gray-600 hover:text-black">
+                  Support
+                </Link>
                 <span className="text-gray-600">{user.first_name || user.email}</span>
                 <button onClick={logout} className="text-gray-600 hover:text-black">
                   Logout
@@ -76,6 +82,9 @@ function App() {
         <Route path="/checkout/:orderId" element={<RequireAuth><Checkout /></RequireAuth>} />
         <Route path="/tickets/:id" element={<RequireAuth><Ticket /></RequireAuth>} />
         <Route path="/account" element={<RequireAuth><Account /></RequireAuth>} />
+        <Route path="/support" element={<RequireAuth><SupportCases /></RequireAuth>} />
+        <Route path="/support/new" element={<RequireAuth><NewSupportCase /></RequireAuth>} />
+        <Route path="/support/:id" element={<RequireAuth><SupportCase /></RequireAuth>} />
         <Route path="/organizer" element={<RequireOrganizer><OrganizerLayout /></RequireOrganizer>}>
           <Route index element={<Dashboard />} />
           <Route path="events" element={<MyEvents />} />

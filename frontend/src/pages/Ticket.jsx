@@ -81,6 +81,11 @@ function Ticket() {
           Download QR
         </a>
       )}
+      <p className="mt-6 text-sm">
+        <Link to={`/support/new?ticket=${ticket.id}`} className="text-indigo-600 underline">
+          Problem with this ticket? Contact the organizer
+        </Link>
+      </p>
     </main>
   )
 }
