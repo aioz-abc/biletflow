@@ -49,6 +49,47 @@ class AuthAPITests(TestCase):
         self.assertTrue(User.objects.get(email=email).email_verified_at)
 
     @override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+    @override_settings(
+        EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend",
+        FRONTEND_BASE_URL="https://biletflow.example",
+    )
+    def test_password_reset_email_links_to_the_frontend_reset_page(self):
+        from urllib.parse import parse_qs, urlsplit
+
+        client = APIClient()
+        email = "link@example.com"
+        client.post("/api/auth/register", {"email": email, "password": "Long-Secret!9823"})
+        mail.outbox.clear()
+        self.assertEqual(client.post("/api/auth/reset-password", {"email": email}).status_code, 200)
+        body = mail.outbox[-1].body
+
+        link = re.search(r"^https://\S+$", body, re.MULTILINE).group(0)
+        parts = urlsplit(link)
+        self.assertEqual(
+            f"{parts.scheme}://{parts.netloc}{parts.path}",
+            "https://biletflow.example/reset-password",
+        )
+        from_link = {k: v[0] for k, v in parse_qs(parts.query).items()}
+        from_lines = dict(re.findall(r"^(uid|token)=(.+)$", body, re.MULTILINE))
+        self.assertEqual(from_link, from_lines)
+
+        # The reset page also accepts the whole email pasted in. It takes the
+        # first uid=/token= it finds, which is now the link's, so those must
+        # read the same as the lines below.
+        pasted = {
+            "uid": re.search(r"\buid=([\w-]+)", body).group(1),
+            "token": re.search(r"\btoken=([\w:-]+)", body).group(1),
+        }
+        self.assertEqual(pasted, from_lines)
+
+        self.assertEqual(
+            client.post(
+                "/api/auth/reset-password/confirm",
+                {**from_link, "new_password": "Different-Secret!7381"},
+            ).status_code,
+            200,
+        )
+
     def test_password_reset_is_generic_single_use_and_revokes_existing_tokens(self):
         client = APIClient()
         email = "reset@example.com"

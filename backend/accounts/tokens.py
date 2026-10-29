@@ -1,6 +1,8 @@
 import secrets
 import uuid
+from urllib.parse import urlencode
 
+from django.conf import settings
 from django.core import signing
 from django.core.mail import send_mail
 from django.utils.encoding import force_bytes, force_str
@@ -38,11 +40,25 @@ def rotate_nonce(user, purpose):
     user.save(update_fields=[field])
 
 
+def password_reset_link(uid, token):
+    # Keep ":" unescaped: the reset page also accepts the whole email pasted in
+    # and reads token= up to the first character outside [\w:-].
+    query = urlencode({"uid": uid, "token": token}, safe=":")
+    return f"{settings.FRONTEND_BASE_URL}/reset-password?{query}"
+
+
 def send_token_email(user, purpose):
-    subject = (
-        "BiletFlow email verification"
-        if purpose == "email_verification"
-        else "BiletFlow password reset"
+    uid, token = encoded_uid(user), token_for(user, purpose)
+    codes = f"uid={uid}\ntoken={token}\n"
+    if purpose == "email_verification":
+        send_mail("BiletFlow email verification", codes, None, [user.email])
+        return
+    body = (
+        "To choose a new BiletFlow password, open this link:\n"
+        f"{password_reset_link(uid, token)}\n\n"
+        "It works once and expires in 1 hour. If you did not ask for this, "
+        "ignore this email; your password stays the same.\n\n"
+        "If the link does not open, paste these lines on the reset page:\n"
+        f"{codes}"
     )
-    body = f"uid={encoded_uid(user)}\ntoken={token_for(user, purpose)}\n"
-    send_mail(subject, body, None, [user.email])
+    send_mail("BiletFlow password reset", body, None, [user.email])
