@@ -4,19 +4,21 @@ import RequireAuth from "./auth/RequireAuth.jsx";
 import RequireOrganizer from "./auth/RequireOrganizer.jsx";
 import Account from "./pages/Account.jsx";
 import Checkout from "./pages/Checkout.jsx";
+import ForgotPassword from "./pages/ForgotPassword.jsx";
 import Home from "./pages/Home.jsx";
 import Login from "./pages/Login.jsx";
 import Register from "./pages/Register.jsx";
 import CreateEvent from "./pages/CreateEvent.jsx";
 import EventDetail from "./pages/EventDetail.jsx";
 import MyEvents from "./pages/MyEvents.jsx";
+import ResetPassword from "./pages/ResetPassword.jsx";
 import Ticket from "./pages/Ticket.jsx";
 
 function App() {
   const { user, isOrganizer, logout } = useAuth();
   const location = useLocation();
   // Login/Register are modals: keep Home rendered underneath them
-  const isAuthModal = ["/login", "/register"].includes(location.pathname);
+  const isAuthModal = ["/login", "/register", "/forgot-password", "/reset-password"].includes(location.pathname);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -65,6 +67,8 @@ function App() {
         <Route path="/" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/events/:id" element={<EventDetail />} />
         <Route path="/checkout/:orderId" element={<RequireAuth><Checkout /></RequireAuth>} />
         <Route path="/tickets/:id" element={<RequireAuth><Ticket /></RequireAuth>} />
