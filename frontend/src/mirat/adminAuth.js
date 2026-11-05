@@ -49,6 +49,7 @@ export function createAdminAuth(storage, request = fetch) {
     return restoring
   }
   return {
+    api: session.api,
     async login(email, password) {
       restoring = null
       try { await session.login(email, password) } catch (error) { throw toAuthError(error) }

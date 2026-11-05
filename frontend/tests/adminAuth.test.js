@@ -78,3 +78,10 @@ test('a pending session check cannot sign the user back in after logout', async 
   assert.equal(await pending, null)
   assert.equal(saved, null)
 })
+test('exposes the authenticated API for platform moderation screens', async () => {
+  const result = { count: 0, next: null, results: [] }
+  const app = setup([{ body: result }], JSON.stringify(pair))
+  assert.deepEqual(await app.auth.api('/admin/users?page=1'), result)
+  assert.equal(app.calls[0].url, '/api/admin/users?page=1')
+  assert.equal(app.calls[0].headers.Authorization, 'Bearer access')
+})

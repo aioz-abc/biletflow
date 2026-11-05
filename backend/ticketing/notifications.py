@@ -5,13 +5,20 @@ messages are printed to the web container log instead of being delivered.
 """
 
 from io import BytesIO
+from pathlib import Path
 
 import qrcode
+import reportlab
 from django.conf import settings
 from django.core.mail import EmailMultiAlternatives
 from django.utils import timezone
 from django.utils.html import escape
 from qrcode.image.svg import SvgPathImage
+from reportlab.lib.colors import HexColor
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.pdfgen import canvas
 
 from .models import Order, SupportCase, Ticket
 
@@ -19,6 +26,89 @@ from .models import Order, SupportCase, Ticket
 def ticket_qr_svg(token):
     output = BytesIO()
     qrcode.make(token, image_factory=SvgPathImage).save(output)
+    return output.getvalue()
+
+
+def ticket_pdf(ticket, token):
+    """Render one canonical admission ticket as a printable A4 PDF."""
+    event = ticket.order_item.order.event
+    ticket_type = ticket.order_item.ticket_type
+    output = BytesIO()
+    font_name = "Helvetica"
+    vera = Path(reportlab.__file__).with_name("fonts") / "Vera.ttf"
+    if vera.exists():
+        font_name = "BiletFlowVera"
+        if font_name not in pdfmetrics.getRegisteredFontNames():
+            pdfmetrics.registerFont(TTFont(font_name, vera))
+
+    document = canvas.Canvas(output, pagesize=A4, pageCompression=0)
+    width, height = A4
+    green = HexColor("#183b30")
+    document.setTitle(f"BiletFlow ticket {ticket.identifier}")
+    document.setAuthor("BiletFlow")
+    document.setFillColor(green)
+    document.rect(0, height - 108, width, 108, fill=1, stroke=0)
+    document.setFillColorRGB(1, 1, 1)
+    document.setFont(font_name, 28)
+    document.drawString(48, height - 67, "biletflow")
+    document.setFont(font_name, 10)
+    document.drawString(49, height - 89, "ADMISSION TICKET • NOT A CAMPAIGN QR")
+
+    document.setFillColorRGB(0.12, 0.16, 0.12)
+    document.setFont(font_name, 22)
+    document.drawString(48, height - 155, event.title[:65])
+    starts = timezone.localtime(event.starts_at).strftime("%d.%m.%Y %H:%M")
+    details = [
+        ("Date and time", starts),
+        ("Venue", event.venue),
+        ("Ticket type", ticket_type.name),
+        ("Ticket ID", str(ticket.identifier)),
+        ("Status", ticket.status.replace("_", " ").title()),
+    ]
+    y = height - 198
+    for label, value in details:
+        document.setFont(font_name, 9)
+        document.setFillColorRGB(0.35, 0.40, 0.35)
+        document.drawString(48, y, label.upper())
+        document.setFont(font_name, 12)
+        document.setFillColorRGB(0.12, 0.16, 0.12)
+        document.drawString(48, y - 18, str(value)[:82])
+        y -= 54
+
+    qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=4)
+    qr.add_data(token)
+    qr.make(fit=True)
+    matrix = qr.get_matrix()
+    qr_size = 225
+    cell = qr_size / len(matrix)
+    left, bottom = width - qr_size - 48, height - 440
+    document.setFillColorRGB(1, 1, 1)
+    document.rect(left - 12, bottom - 12, qr_size + 24, qr_size + 24, fill=1, stroke=0)
+    document.setFillColor(green)
+    for row, values in enumerate(matrix):
+        for column, enabled in enumerate(values):
+            if enabled:
+                document.rect(
+                    left + column * cell,
+                    bottom + (len(matrix) - row - 1) * cell,
+                    cell + 0.2,
+                    cell + 0.2,
+                    fill=1,
+                    stroke=0,
+                )
+
+    document.setFillColorRGB(0.12, 0.16, 0.12)
+    document.setFont(font_name, 11)
+    document.drawCentredString(width / 2, 82, "Present this admission QR at the event entrance.")
+    document.setFont(font_name, 8)
+    document.setFillColorRGB(0.4, 0.45, 0.4)
+    document.drawCentredString(
+        width / 2,
+        62,
+        "Generated from the BiletFlow ticket record. No payment-card data is included.",
+    )
+    document.showPage()
+    document.save()
     return output.getvalue()
 
 

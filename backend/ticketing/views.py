@@ -31,7 +31,7 @@ from .models import (
     Ticket,
     TicketType,
 )
-from .notifications import ticket_qr_svg
+from .notifications import ticket_pdf, ticket_qr_svg
 from .permissions import CanCheckInEvent, scan_events, support_cases, visible_events
 from .serializers import (
     AuditLogSerializer,
@@ -362,6 +362,22 @@ class TicketQR(APIView):
         ticket = get_object_or_404(accessible_tickets(request.user), pk=pk)
         response = HttpResponse(ticket_qr_svg(qr_token(ticket)), content_type="image/svg+xml")
         response["Cache-Control"] = "private, no-store"
+        return response
+
+
+class TicketPDF(APIView):
+    def get(self, request, pk):
+        ticket = get_object_or_404(
+            accessible_tickets(request.user).select_related(
+                "order_item__order__event", "order_item__ticket_type"
+            ),
+            pk=pk,
+        )
+        content = ticket_pdf(ticket, qr_token(ticket))
+        response = HttpResponse(content, content_type="application/pdf")
+        response["Content-Disposition"] = f'attachment; filename="biletflow-ticket-{ticket.pk}.pdf"'
+        response["Cache-Control"] = "private, no-store"
+        response["X-Content-Type-Options"] = "nosniff"
         return response
 
 
