@@ -47,8 +47,9 @@ function EventSales() {
             {dateFmt.format(new Date(event.starts_at))} · {event.venue} · {event.published ? 'Published' : 'Draft'}
           </p>
         </div>
-        <span className="flex gap-4 text-sm">
+        <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <Link to={`/organizer/events/${id}/edit`} className="text-indigo-600 underline">Edit &amp; tickets</Link>
+          <Link to={`/organizer/events/${id}/staff`} className="text-indigo-600 underline">Event Admins</Link>
           {event.published && <Link to={`/events/${id}`} className="text-indigo-600 underline">Public page</Link>}
         </span>
       </div>
