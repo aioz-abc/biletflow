@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import EventOrders from '../components/EventOrders'
 import { formatAmount, formatMoney } from '../utils/money'
 import { ticketsSold } from '../utils/sales'
 
@@ -22,6 +23,7 @@ function EventSales() {
   const [sales, setSales] = useState(null)
   const [activation, setActivation] = useState(null)
   const [error, setError] = useState(null)
+  const [version, setVersion] = useState(0) // bumped after a refund or cancellation
 
   useEffect(() => {
     let active = true
@@ -36,7 +38,7 @@ function EventSales() {
       .then((state) => active && setActivation(state))
       .catch(() => {}) // the banner is optional
     return () => { active = false }
-  }, [id])
+  }, [id, version])
 
   if (error) return <p role="alert" className="text-red-600">{error}</p>
   if (!sales) return <p>Loading…</p>
@@ -120,6 +122,8 @@ function EventSales() {
           </table>
         </div>
       )}
+
+      <EventOrders eventId={id} onChanged={() => setVersion((v) => v + 1)} />
     </main>
   )
 }

@@ -5,7 +5,7 @@ from urllib.parse import urlencode
 import qrcode
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import Count, Exists, OuterRef, Q
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
@@ -25,6 +25,7 @@ from .models import (
     Event,
     Order,
     PaidSalesActivation,
+    Payment,
     PromoCode,
     PromotionalCampaign,
     StaffAssignment,
@@ -47,6 +48,7 @@ from .serializers import (
     AuditLogSerializer,
     CampaignSerializer,
     CheckoutSerializer,
+    EventOrderSerializer,
     EventSerializer,
     OpenSupportCaseSerializer,
     OrderSerializer,
@@ -205,6 +207,14 @@ class TicketTypeList(generics.ListCreateAPIView):
             queryset = queryset.filter(hidden=False)
         return queryset
 
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        if self.request.method == "POST":
+            context["event"] = get_object_or_404(
+                managed_events(self.request.user), pk=self.kwargs["pk"]
+            )
+        return context
+
     @transaction.atomic
     def perform_create(self, serializer):
         event = get_object_or_404(
@@ -322,6 +332,28 @@ class EventAttendees(generics.ListAPIView):
     def get_queryset(self):
         event = get_object_or_404(scan_events(self.request.user), pk=self.kwargs["pk"])
         return Ticket.objects.filter(order_item__order__event=event)
+
+
+class EventOrders(generics.ListAPIView):
+    """Organizer's list of an event's orders with refund/cancel actions (SRS 4.9).
+
+    Pending reservations are left out: they expire by themselves.
+    """
+
+    serializer_class = EventOrderSerializer
+
+    def get_queryset(self):
+        event = get_object_or_404(managed_events(self.request.user), pk=self.kwargs["pk"])
+        return (
+            event.orders.exclude(status="pending")
+            .select_related("purchaser")
+            .annotate(
+                tickets_count=Count("items__tickets"),
+                checked_in=Count("items__tickets", filter=Q(items__tickets__status="checked_in")),
+                has_payment=Exists(Payment.objects.filter(order=OuterRef("pk"))),
+            )
+            .order_by("-confirmed_at", "-pk")
+        )
 
 
 class EventStaff(generics.ListCreateAPIView):
