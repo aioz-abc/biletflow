@@ -1,10 +1,12 @@
-"""Shared settings for the local Docker demo and PostgreSQL-backed CI."""
+"""Shared settings for the local Docker demo, PostgreSQL-backed CI and Heroku."""
 
 import os
 from datetime import timedelta
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+
+from .database import database_from_url
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEBUG = os.environ.get("DJANGO_DEBUG", "0").lower() in {"1", "true"}
@@ -37,6 +39,10 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+if not DEBUG:
+    # Serves collected static files and the built React app (WHITENOISE_ROOT).
+    # In development Vite serves the frontend and runserver the static files.
+    MIDDLEWARE.insert(1, "whitenoise.middleware.WhiteNoiseMiddleware")
 ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
@@ -53,17 +59,21 @@ TEMPLATES = [
     }
 ]
 WSGI_APPLICATION = "config.wsgi.application"
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.postgresql",
-        "NAME": os.environ.get("POSTGRES_DB", "biletflow"),
-        "USER": os.environ.get("POSTGRES_USER", "biletflow"),
-        "PASSWORD": os.environ["POSTGRES_PASSWORD"],
-        "HOST": os.environ.get("POSTGRES_HOST", "db"),
-        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
-        "OPTIONS": {"connect_timeout": 5},
+if os.environ.get("DATABASE_URL"):
+    # Heroku Postgres provides one URL; it requires TLS.
+    DATABASES = {"default": database_from_url(os.environ["DATABASE_URL"])}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB", "biletflow"),
+            "USER": os.environ.get("POSTGRES_USER", "biletflow"),
+            "PASSWORD": os.environ["POSTGRES_PASSWORD"],
+            "HOST": os.environ.get("POSTGRES_HOST", "db"),
+            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+            "OPTIONS": {"connect_timeout": 5},
+        }
     }
-}
 AUTH_USER_MODEL = "accounts.User"
 AUTH_PASSWORD_VALIDATORS = [
     {"NAME": "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"},
@@ -95,6 +105,20 @@ USE_TZ = True
 APPEND_SLASH = False
 STATIC_URL = "static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {
+        "BACKEND": (
+            "django.contrib.staticfiles.storage.StaticFilesStorage"
+            if DEBUG
+            else "whitenoise.storage.CompressedManifestStaticFilesStorage"
+        )
+    },
+}
+# The production image copies `npm run build` output here; Django then serves the
+# React app from the same origin as /api (see config.urls.frontend_app).
+FRONTEND_DIST = Path(os.environ.get("FRONTEND_DIST", BASE_DIR / "frontend_dist"))
+WHITENOISE_ROOT = FRONTEND_DIST if FRONTEND_DIST.is_dir() else None
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "BiletFlow Demo <noreply@example.com>"
@@ -104,3 +128,7 @@ PROCESSING_FEE_BPS = int(os.environ.get("PROCESSING_FEE_BPS", "300"))
 PAID_SALES_ACTIVATION_FEE_MINOR = int(os.environ.get("PAID_SALES_ACTIVATION_FEE_MINOR", "500000"))
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
+# Behind Heroku's router TLS ends before Django; trust its forwarded scheme.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SECURE_SSL_REDIRECT = not DEBUG and os.environ.get("DJANGO_SSL_REDIRECT", "1") == "1"
+CSRF_TRUSTED_ORIGINS = [FRONTEND_BASE_URL]
