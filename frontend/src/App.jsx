@@ -6,6 +6,8 @@ import Account from "./pages/Account.jsx";
 import Checkout from "./pages/Checkout.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
 import EventActivation from "./pages/EventActivation.jsx";
+import EventAnalytics from "./pages/EventAnalytics.jsx";
+import EventHistory from "./pages/EventHistory.jsx";
 import EventSales from "./pages/EventSales.jsx";
 import EventStaff from "./pages/EventStaff.jsx";
 import ForgotPassword from "./pages/ForgotPassword.jsx";
@@ -96,6 +98,8 @@ function App() {
           <Route path="events/:id/edit" element={<CreateEvent key="edit" />} />
           <Route path="events/:id/staff" element={<EventStaff />} />
           <Route path="events/:id/activation" element={<EventActivation />} />
+          <Route path="analytics" element={<EventAnalytics />} />
+          <Route path="history" element={<EventHistory />} />
         </Route>
       </Routes>
     </div>

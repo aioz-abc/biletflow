@@ -47,6 +47,7 @@ function MyEvents() {
                   Edit &amp; tickets
                 </Link>
                 <Link to={`/organizer/events/${ev.id}/staff`} className="text-indigo-600 underline">Event Admins</Link>
+                <Link to={`/organizer/analytics?event=${ev.id}`} className="text-indigo-600 underline">Analytics</Link>
                 {ev.published && (
                   <Link to={`/events/${ev.id}`} className="text-indigo-600 underline">Public page</Link>
                 )}

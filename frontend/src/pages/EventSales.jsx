@@ -55,6 +55,7 @@ function EventSales() {
           <Link to={`/organizer/events/${id}/edit`} className="text-indigo-600 underline">Edit &amp; tickets</Link>
           <Link to={`/organizer/events/${id}/staff`} className="text-indigo-600 underline">Event Admins</Link>
           <Link to={`/organizer/events/${id}/activation`} className="text-indigo-600 underline">Paid sales</Link>
+          <Link to={`/organizer/analytics?event=${id}`} className="text-indigo-600 underline">Analytics</Link>
           {event.published && <Link to={`/events/${id}`} className="text-indigo-600 underline">Public page</Link>}
         </span>
       </div>
