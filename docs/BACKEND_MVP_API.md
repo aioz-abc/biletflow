@@ -16,7 +16,7 @@ with a timezone. Unknown/read-only fields in create/update payloads return 400.
 | POST `/auth/login` | `{email, password}` → `{access, refresh, user}` |
 | POST `/auth/refresh` | `{refresh}` → new `{access, refresh}`; old refresh is consumed |
 | POST `/auth/logout` | `{refresh}` → 204; invalid/expired/previously revoked tokens return 401 |
-| POST `/auth/reset-password` | `{email}` → generic 200, whether the account exists or not |
+| POST `/auth/reset-password` | `{email}` → generic 200, whether the account exists or not. The email links to `{FRONTEND_BASE_URL}/reset-password?uid=…&token=…` and also lists the `uid=`/`token=` lines for pasting |
 | POST `/auth/reset-password/confirm` | `{uid, token, new_password}` → 200; token valid for 1 hour and single use |
 | GET `/auth/me` | Current user, roles and organizer_profile |
 
