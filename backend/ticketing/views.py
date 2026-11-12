@@ -19,11 +19,12 @@ from accounts.models import OrganizerProfile, User
 from accounts.permissions import IsPlatformAdmin
 from accounts.serializers import SuspendSerializer
 
-from . import services
+from . import analytics, services
 from .models import (
     AuditLog,
     Event,
     Order,
+    PaidSalesActivation,
     PromoCode,
     PromotionalCampaign,
     StaffAssignment,
@@ -32,8 +33,17 @@ from .models import (
     TicketType,
 )
 from .notifications import ticket_pdf, ticket_qr_svg
-from .permissions import CanCheckInEvent, scan_events, support_cases, visible_events
+from .permissions import (
+    CanCheckInEvent,
+    managed_events,
+    scan_events,
+    support_cases,
+    visible_events,
+)
 from .serializers import (
+    ActivationSerializer,
+    AdminActivationSerializer,
+    AttendeeSerializer,
     AuditLogSerializer,
     CampaignSerializer,
     CheckoutSerializer,
@@ -55,11 +65,6 @@ from .serializers import (
     TicketTypeSerializer,
     qr_token,
 )
-
-
-def managed_events(user):
-    events = Event.objects.all()
-    return events if user.is_superuser else events.filter(organizer__user=user)
 
 
 class EventList(generics.ListCreateAPIView):
@@ -265,6 +270,7 @@ class Checkout(APIView):
             pk,
             serializer.validated_data["outcome"],
             serializer.validated_data.get("promo_code"),
+            serializer.validated_data.get("attendees"),
         )
         return Response(OrderSerializer(order).data)
 
@@ -355,6 +361,12 @@ class TicketDetail(generics.RetrieveAPIView):
 
     def get_queryset(self):
         return accessible_tickets(self.request.user)
+
+    def patch(self, request, pk):
+        serializer = AttendeeSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        ticket = services.update_attendee(request.user, pk, serializer.validated_data)
+        return Response(TicketSerializer(ticket).data)
 
 
 class TicketQR(APIView):
@@ -532,6 +544,53 @@ class CampaignRedirect(APIView):
             f"?{urlencode({'promo_code': code.code})}"
         )
         return HttpResponseRedirect(url)
+
+
+class EventActivation(APIView):
+    """Paid-sales activation checklist for the event owner (SRS 4.5)."""
+
+    def get(self, request, pk):
+        event = get_object_or_404(managed_events(request.user), pk=pk)
+        return Response(services.activation_state(event))
+
+    def post(self, request, pk):
+        serializer = ActivationSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        return Response(services.submit_activation(request.user, pk, serializer.validated_data))
+
+
+class AdminActivationList(generics.ListAPIView):
+    serializer_class = AdminActivationSerializer
+    permission_classes = [IsPlatformAdmin]
+
+    def get_queryset(self):
+        activations = PaidSalesActivation.objects.select_related("event__organizer__user")
+        status = self.request.query_params.get("status")
+        if status == "active":
+            activations = activations.filter(activated_at__isnull=False, suspended_at__isnull=True)
+        elif status == "suspended":
+            activations = activations.filter(suspended_at__isnull=False)
+        elif status == "pending":
+            activations = activations.filter(activated_at__isnull=True)
+        return activations
+
+
+class AdminActivationSuspend(APIView):
+    permission_classes = [IsPlatformAdmin]
+
+    def post(self, request, pk):
+        serializer = SuspendSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        return Response(
+            services.suspend_paid_sales(request.user, pk, data["suspended"], data["reason"])
+        )
+
+
+class EventAnalytics(APIView):
+    def get(self, request, pk):
+        event = get_object_or_404(managed_events(request.user), pk=pk)
+        return Response(analytics.event_analytics(event, request.query_params))
 
 
 class EventSales(APIView):

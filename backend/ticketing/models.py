@@ -39,6 +39,36 @@ class Event(models.Model):
         ]
 
 
+class PaidSalesActivation(models.Model):
+    """Simulated paid-sales activation of one event (SRS 3.2, 4.5, UC2).
+
+    Identity, payout account and fee are demonstration records only: no real
+    verification, bank data or money is involved. Paid tickets of the event are
+    sellable only while ``activated_at`` is set and ``suspended_at`` is not.
+    """
+
+    event = models.OneToOneField(Event, on_delete=models.PROTECT, related_name="activation")
+    identity_verified_at = models.DateTimeField(null=True, blank=True)
+    # Opaque simulated payout account reference; never a real account or card number.
+    payout_reference = models.CharField(max_length=64, blank=True)
+    terms_accepted_at = models.DateTimeField(null=True, blank=True)
+    fee_minor = models.PositiveBigIntegerField(default=0)
+    fee_reference = models.UUIDField(null=True, blank=True, unique=True, editable=False)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    # Set by a platform admin when fraud or a policy violation is suspected (SRS 4.5).
+    suspended_at = models.DateTimeField(null=True, blank=True)
+    suspension_reason = models.CharField(max_length=300, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-pk"]
+
+    @property
+    def sales_open(self):
+        return self.activated_at is not None and self.suspended_at is None
+
+
 class StaffAssignment(models.Model):
     event = models.ForeignKey(Event, on_delete=models.PROTECT, related_name="staff_assignments")
     user = models.ForeignKey(
@@ -135,6 +165,10 @@ class Ticket(models.Model):
         choices=[(v, v) for v in ("valid", "checked_in", "cancelled", "refunded")],
         default="valid",
     )
+    # Ticket holder (SRS 4.6, 4.7), separate from the purchasing account: one buyer can
+    # buy for several people. Defaults to the purchaser when no holder is given.
+    attendee_name = models.CharField(max_length=200, blank=True)
+    attendee_email = models.EmailField(blank=True)
     issued_at = models.DateTimeField(auto_now_add=True)
     checked_in_at = models.DateTimeField(null=True)
     checked_in_by = models.ForeignKey(settings.AUTH_USER_MODEL, null=True, on_delete=models.PROTECT)

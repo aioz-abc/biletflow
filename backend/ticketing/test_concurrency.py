@@ -11,6 +11,7 @@ from accounts.models import OrganizerProfile, User
 from ticketing.models import Event, Order, Payment, Ticket, TicketType
 from ticketing.serializers import qr_token
 from ticketing.services import reserve
+from ticketing.testing import activate_paid_sales
 
 
 class ConcurrentSalesTests(TransactionTestCase):
@@ -37,6 +38,7 @@ class ConcurrentSalesTests(TransactionTestCase):
         self.kind = TicketType.objects.create(
             event=self.event, name="Standard", quantity=1, price_minor=100
         )
+        activate_paid_sales(self.event.pk)
 
     def race(self, path, payload):
         barrier = Barrier(2)

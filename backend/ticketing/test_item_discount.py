@@ -10,6 +10,7 @@ from rest_framework.test import APIClient
 from accounts.models import OrganizerProfile, User
 from ticketing.models import OrderItem, PromotionalCampaign
 from ticketing.services import allocate_discount
+from ticketing.testing import activate_paid_sales
 
 
 def line(pk, kind, price, quantity=1):
@@ -76,6 +77,7 @@ class CheckoutStoresItemDiscountTests(TestCase):
         self.vip = self.ticket_type("VIP", 30000)
         self.general = self.ticket_type("General", 10000)
         self.client.post(f"/api/events/{self.event}/publish", {"published": True}, format="json")
+        activate_paid_sales(self.event)
 
     def ticket_type(self, name, price):
         response = self.client.post(

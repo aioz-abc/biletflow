@@ -62,6 +62,7 @@ def ticket_pdf(ticket, token):
         ("Date and time", starts),
         ("Venue", event.venue),
         ("Ticket type", ticket_type.name),
+        ("Attendee", ticket.attendee_name or "—"),
         ("Ticket ID", str(ticket.identifier)),
         ("Status", ticket.status.replace("_", " ").title()),
     ]
@@ -146,14 +147,18 @@ def send_order_confirmation(order_id):
         "Tickets (each QR code is also attached as an SVG file):",
     ]
     for ticket in tickets:
-        lines.append(f"- {ticket.order_item.ticket_type.name} · ticket {ticket.identifier}")
+        lines.append(
+            f"- {ticket.order_item.ticket_type.name} · {ticket.attendee_name}"
+            f" · ticket {ticket.identifier}"
+        )
     lines += [
         "",
         f"All tickets are in your account: {settings.FRONTEND_BASE_URL}/tickets",
         "Demo environment: no real money was charged.",
     ]
     html_items = "".join(
-        f"<li>{escape(t.order_item.ticket_type.name)} · <code>{t.identifier}</code></li>"
+        f"<li>{escape(t.order_item.ticket_type.name)} · {escape(t.attendee_name)}"
+        f" · <code>{t.identifier}</code></li>"
         for t in tickets
     )
     html = (

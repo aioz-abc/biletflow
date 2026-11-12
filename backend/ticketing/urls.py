@@ -16,6 +16,8 @@ urlpatterns = [
     path("events/<int:pk>/campaigns", views.CampaignList.as_view()),
     path("events/<int:pk>/audit-log", views.EventAuditLog.as_view()),
     path("events/<int:pk>/sales", views.EventSales.as_view()),
+    path("events/<int:pk>/analytics", views.EventAnalytics.as_view()),
+    path("events/<int:pk>/activation", views.EventActivation.as_view()),
     path("campaigns/<int:pk>/qr", views.CampaignQR.as_view()),
     path("campaigns/<int:pk>", views.CampaignDetail.as_view()),
     path("campaign-links/<str:token>", views.CampaignLinkResolve.as_view()),

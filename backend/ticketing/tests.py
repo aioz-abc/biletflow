@@ -5,6 +5,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 
 from accounts.models import OrganizerProfile, User
+from ticketing.testing import activate_paid_sales
 
 
 class TicketingAPITests(TestCase):
@@ -193,6 +194,7 @@ class TicketingAPITests(TestCase):
             ).status_code,
             200,
         )
+        activate_paid_sales(event)
         return event, response.json()["id"]
 
     def reserve(self, event, kind, quantity=1):

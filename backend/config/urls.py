@@ -25,4 +25,6 @@ urlpatterns += [
     path("api/admin/users", auth.AdminUserList.as_view()),
     path("api/admin/users/<int:pk>/suspend", auth.AdminUserSuspend.as_view()),
     path("api/admin/events/<int:pk>/suspend", ticketing.AdminEventSuspend.as_view()),
+    path("api/admin/activations", ticketing.AdminActivationList.as_view()),
+    path("api/admin/activations/<int:pk>/suspend", ticketing.AdminActivationSuspend.as_view()),
 ]

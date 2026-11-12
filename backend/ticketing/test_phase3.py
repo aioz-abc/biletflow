@@ -9,6 +9,7 @@ from rest_framework.test import APIClient
 
 from accounts.models import OrganizerProfile, User
 from ticketing.models import Event, Order, Payment, PromoCode, Ticket
+from ticketing.testing import activate_paid_sales
 
 
 class Phase3Helpers:
@@ -40,6 +41,7 @@ class Phase3Helpers:
             format="json",
         ).json()["id"]
         self.client.post(f"/api/events/{event}/publish", {"published": True}, format="json")
+        activate_paid_sales(event)
         return event, kind
 
     def buy(self, event, kind, quantity=1, outcome="success"):

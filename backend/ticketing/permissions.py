@@ -4,6 +4,11 @@ from rest_framework.permissions import BasePermission
 from .models import Event, SupportCase
 
 
+def managed_events(user):
+    events = Event.objects.all()
+    return events if user.is_superuser else events.filter(organizer__user=user)
+
+
 def visible_events(user):
     # Private events are only ever visible to their owner/admin, even by direct
     # link; unlisted events are reachable by ID/QR but excluded from the public
