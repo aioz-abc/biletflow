@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import AddToCalendar from '../components/AddToCalendar.jsx'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeStyle: 'short' })
 const STATUS = { valid: 'Valid', checked_in: 'Checked in', cancelled: 'Cancelled', refunded: 'Refunded' }
@@ -63,6 +64,7 @@ function Ticket() {
             <h1 className="text-2xl font-bold">{event.title}</h1>
             <p className="mt-1 text-gray-600">{dateFmt.format(new Date(event.starts_at))}</p>
             <p className="text-gray-600">{event.venue}</p>
+            <AddToCalendar event={event} className="mt-2 justify-center" />
           </>
         ) : (
           <h1 className="text-2xl font-bold">
