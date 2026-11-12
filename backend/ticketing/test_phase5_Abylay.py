@@ -76,9 +76,7 @@ class Phase5BusinessLogicCoverageTests(TestCase):
             "discount_value": 20,
             **overrides,
         }
-        response = self.client.post(
-            f"/api/events/{event_id}/campaigns", payload, format="json"
-        )
+        response = self.client.post(f"/api/events/{event_id}/campaigns", payload, format="json")
         self.assertEqual(response.status_code, 201, response.content)
         return response.json()
 
