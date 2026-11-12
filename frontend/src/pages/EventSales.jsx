@@ -20,6 +20,7 @@ function EventSales() {
   const { id } = useParams()
   const [event, setEvent] = useState(null)
   const [sales, setSales] = useState(null)
+  const [activation, setActivation] = useState(null)
   const [error, setError] = useState(null)
 
   useEffect(() => {
@@ -31,6 +32,9 @@ function EventSales() {
         setSales(summary)
       })
       .catch((err) => active && setError(err.status === 404 ? 'Event not found.' : err.message))
+    api(`/events/${id}/activation`)
+      .then((state) => active && setActivation(state))
+      .catch(() => {}) // the banner is optional
     return () => { active = false }
   }, [id])
 
@@ -50,9 +54,19 @@ function EventSales() {
         <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
           <Link to={`/organizer/events/${id}/edit`} className="text-indigo-600 underline">Edit &amp; tickets</Link>
           <Link to={`/organizer/events/${id}/staff`} className="text-indigo-600 underline">Event Admins</Link>
+          <Link to={`/organizer/events/${id}/activation`} className="text-indigo-600 underline">Paid sales</Link>
           {event.published && <Link to={`/events/${id}`} className="text-indigo-600 underline">Public page</Link>}
         </span>
       </div>
+
+      {activation && activation.checklist.some((item) => item.step === 'paid_ticket_type' && item.done) && activation.status !== 'active' && (
+        <p role="status" className="mt-4 rounded-xl border border-amber-300 bg-amber-50 p-4">
+          {activation.status === 'suspended'
+            ? 'Paid sales for this event are suspended by a platform admin.'
+            : 'Paid tickets cannot be bought until paid sales are activated.'}{' '}
+          <Link to={`/organizer/events/${id}/activation`} className="text-indigo-600 underline">Open the checklist</Link>
+        </p>
+      )}
 
       <div className="mt-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Stat label="Tickets sold" value={`${ticketsSold(sales)} / ${event.capacity}`} />

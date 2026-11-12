@@ -68,10 +68,14 @@ your piece a little ahead of whoever needs it next.
 
 ## Phase 5 (Oct 27–Nov 9) — Integration 📍 Report 5 (Nov 9)
 
-- This is your heaviest week: connect backend ↔ frontend ↔ mobile,
+- ✅ This is your heaviest week: connect backend ↔ frontend ↔ mobile,
   resolve cross-service bugs, and confirm a fresh `git clone` +
-  `docker compose up` gives a working demo end to end.
-- Support Mirat's remaining admin/analytics endpoints used by `frontend/`.
+  `docker compose up` gives a working demo end to end — the frontend now runs
+  in Compose next to the API.
+- ✅ Support Mirat's remaining admin/analytics endpoints used by `frontend/` —
+  `GET /events/:id/analytics` (acceptance cases 1–10) and `/admin/activations`.
+- ✅ Carried over from Phase 4: paid-sales activation (SRS 4.5) and ticket
+  holder details (SRS 4.6, 4.7).
 
 ## Phase 6 (Nov 10–16) — Stabilize 📍 Final (Nov 16)
 

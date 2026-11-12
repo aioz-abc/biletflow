@@ -1,8 +1,8 @@
 # BiletFlow
 
 Учебная платформа событий и билетов для Казахстана. Backend: Django + DRF +
-PostgreSQL. Backend MVP реализует регистрацию/JWT, события, типы билетов,
-резервирование, симуляцию оплаты, QR-билеты и check-in.
+PostgreSQL, frontend: React + Vite + Tailwind, мобильный сканер: React Native
+(`mobile/`). Одна команда поднимает базу, API и веб-приложение вместе.
 
 Актуальные маршруты, JSON-примеры и ограничения: [Backend MVP API](docs/BACKEND_MVP_API.md).
 
@@ -12,20 +12,25 @@ PostgreSQL. Backend MVP реализует регистрацию/JWT, собы�
 
 ```bash
 docker compose up --build -d --wait
-curl http://localhost:8000/api/health
+docker compose exec -T web python manage.py seed_demo
 ```
 
-Ожидаемый ответ: `{"status":"ok","database":"ok"}`.
-При первом запуске Docker скачает образы и Python-зависимости. Compose
-дождётся PostgreSQL и применит миграции перед запуском Django.
+Затем откройте [localhost:5173](http://localhost:5173) — веб-приложение для
+посетителей и организаторов; админка Мирата — [localhost:5173/admin](http://localhost:5173/admin).
+`seed_demo` печатает демо-аккаунты (пароль `Demo-pass-2026!`) и события.
+При первом запуске Docker скачает образы, Python- и npm-зависимости (до пары
+минут). Compose дождётся PostgreSQL, применит миграции и запустит Django, а
+затем Vite dev server, который проксирует `/api` и ссылки Campaign QR `/c/` в
+backend.
 
-- API health: [localhost:8000/api/health](http://localhost:8000/api/health)
+- Веб-приложение: [localhost:5173](http://localhost:5173)
+- API health: [localhost:8000/api/health](http://localhost:8000/api/health), ответ `{"status":"ok","database":"ok"}`
 - Внутренняя Django admin: [localhost:8000/admin/](http://localhost:8000/admin/)
-- Логи: `docker compose logs -f web`
+- Логи: `docker compose logs -f web` (письма тоже здесь) и `docker compose logs -f frontend`
 - Состояние: `docker compose ps`
 - Остановка с сохранением данных: `docker compose down`
 
-Web привязан к `127.0.0.1`; PostgreSQL не публикуется на порту компьютера.
+Web и frontend привязаны к `127.0.0.1`; PostgreSQL не публикуется на порту компьютера.
 Данные остаются в Docker volume между запусками. Не используйте `down -v`,
 если хотите сохранить локальную базу.
 
@@ -45,10 +50,10 @@ React-приложение Мират разрабатывает в своей �
 Чтобы изменить порт или настройки, скопируйте `.env.example` в `.env` в
 корне проекта и отредактируйте нужные значения. `.env` исключён из Git.
 
-Если порт 8000 занят:
+Если порт 8000 или 5173 занят:
 
 ```bash
-BACKEND_PORT=8001 docker compose up -d --wait
+BACKEND_PORT=8001 FRONTEND_PORT=5174 docker compose up -d --wait
 ```
 
 Тогда откройте `http://localhost:8001/api/health`. После изменения Python-
@@ -85,10 +90,11 @@ GitHub Actions повторяет сборку, запуск и эти пров�
 
 | Сейчас реализовано | Следующие этапы |
 | --- | --- |
-| JWT, подтверждение email, восстановление пароля и роли, включая сотрудников события | UI для подтверждения email и восстановления пароля |
-| События, типы билетов, промокоды, возвраты и временные резервы | Рассадка и расширенная аналитика |
-| Симуляция checkout, письмо с QR-билетами, сервисный сбор, сводка продаж и однократный check-in | Реальная оплата и PDF |
-| PostgreSQL, миграции, Docker, API/конкурентные тесты и CI; страница события и покупки | Остальные frontend-экраны и публичный production-деплой |
+| JWT, подтверждение email, восстановление пароля и роли, включая сотрудников события | UI подтверждения email |
+| События, типы билетов, промокоды и Campaign QR, возвраты, временные резервы, поддержка | Рассадка (по SRS вырезается первой) |
+| Активация платных продаж, симуляция checkout, имя посетителя на билете, письма, PDF-билеты, однократный check-in | Реальная оплата (вне рамок MVP) |
+| Сводка продаж и аналитика события по дням (`/events/{id}/analytics`); админка: пользователи, события, активации | Дашборд аналитики Мирата на этом API |
+| PostgreSQL, миграции, Docker Compose со всеми сервисами, API/конкурентные тесты и CI | Публичный production-деплой |
 
 Полная проверка через реальный HTTP API:
 

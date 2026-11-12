@@ -218,6 +218,69 @@ including later-refunded orders; `estimated_payout_minor = gross - refunds -
 fees`. `simulated: true` is always present; the UI must label these numbers as
 demonstration data, never as real transactions.
 
+### Event analytics (SRS 4.15)
+
+`GET /events/{id}/analytics?from=2026-11-01&to=2026-12-01&ticket_type=7` (owner
+or platform admin, otherwise 404; event staff get 404 too). It implements the
+agreed contract in `docs/ANALYTICS_REQUIREMENTS.md`:
+
+- `from`/`to` are calendar dates in Asia/Almaty, `from` inclusive, `to`
+  exclusive, both or neither, at most 366 days; no dates means all time.
+  Invalid or reversed dates, or another event's `ticket_type`, return 400.
+- A sale, its discount, its fee and its tickets count on `Order.confirmed_at`;
+  a refund and the reversal of its fee count on `Refund.created_at`. Line
+  discounts are the shares stored at checkout (`OrderItem.discount_minor`);
+  an order's fee is split across its lines by collected amount.
+- `inventory` is a current snapshot (`as_of`), independent of the dates:
+  `capacity`, `active_tickets`, `reserved_tickets`, `remaining`, `checked_in`,
+  `check_in_percent`. With `ticket_type`, `inventory.ticket_type` adds that
+  type's `quantity` and `type_remaining` next to, never instead of, the
+  whole-event figures.
+- `totals`, every `daily` row and every `ticket_types` row carry
+  `issued_tickets`, `sales_before_discount_minor`, `discount_minor`,
+  `collected_minor`, `refunded_minor`, `net_receipts_minor` and `fees_minor`.
+  `daily` lists every day of the interval, zero days included (all time spans
+  the first to the last day with activity). Daily rows sum exactly to `totals`.
+- `campaigns` rows cover orders that redeemed each campaign
+  (`campaign_scope` says so), with `redemptions` and current `active_tickets`.
+- All-time `collected_minor`, `refunded_minor` and `fees_minor` equal the
+  `/sales` summary's `gross_minor`, `refunds_minor` and `fees_minor`.
+
+## Paid sales activation (SRS 4.5)
+
+Paid tickets of an event can be reserved and checked out only after its
+simulated activation is complete; free tickets never need it. Activation
+applies to one event. A reservation or checkout that includes a paid line
+without it returns 409 "Paid sales are not activated for this event."
+
+| Method and path | Behavior |
+| --- | --- |
+| GET `/events/{id}/activation` | Owner or platform admin: the checklist |
+| POST `/events/{id}/activation` | Owner: any of `{identity_confirmed: true, payout_reference, accept_terms: true, pay_fee: "success"\|"failure"}` |
+| GET `/admin/activations?status=active\|pending\|suspended` | Platform admin: every activation with event title and organizer email |
+| POST `/admin/activations/{id}/suspend` | Platform admin: `{suspended, reason?}` stops or restores paid sales |
+
+The checklist response has `status` (`not_started`, `in_progress`, `active`,
+`suspended`), `sales_open`, `fee_minor`, `simulated: true` and `checklist`
+steps `paid_ticket_type`, `identity_verified`, `payout_account`,
+`terms_accepted`, `fee_paid`. The fee (`PAID_SALES_ACTIVATION_FEE_MINOR`,
+default 500000 tiyn = 5 000 KZT) can be paid only after every other step;
+paying again is a no-op. `payout_reference` is an opaque simulated string; a
+value with 12 or more digits is refused so no real account or card number is
+stored. Every step, a failed fee, activation and suspension are written to the
+event audit log. Suspending paid sales leaves free sales and issued tickets alone.
+
+## Ticket holders (SRS 4.6, 4.7)
+
+`POST /orders/{id}/checkout` accepts optional `attendees:
+[{ticket_type, name, email?}]`, matched to that type's tickets in order; any
+ticket left unnamed is held by the purchaser (full name, else email). More
+attendees than tickets of a type returns 400. Tickets carry `attendee_name`
+and `attendee_email`; the scanner, attendee list, confirmation email and PDF
+show the holder. `PATCH /tickets/{id}` `{name, email?}` lets the purchaser pass
+a valid, not checked-in ticket to someone else (409 otherwise); it is audited.
+Tickets issued earlier were backfilled with their purchaser.
+
 ## Cancellations and refunds
 
 API status is `pending`, `expired`, `cancelled`, `confirmed` or `refunded`.
@@ -338,13 +401,14 @@ the demo. A real provider requires server-verified payment confirmation.
 | POST `/tickets/{id}/verify` | Same verification, additionally binds token to numeric ID |
 | POST `/tickets/{id}/check-in` | Same check-in, additionally binds token to numeric ID |
 
-Ticket response contains id, identifier (UUID), event, ticket_type, status,
+Ticket response contains id, identifier (UUID), event, ticket_type,
+attendee_name, attendee_email, status,
 issued_at, checked_in_at, qr_token. The QR encodes a UUID signed with a dedicated
 admission salt. It is an admission credential: keep it private. Unpublishing an
 event stops sales but does not cancel already-issued tickets. Verification is
 read-only; check-in rejects a repeated scan with 409 and records operator/time.
 There is no check-in time window in the MVP; authorized staff may test
-admission before the event. Individual holder details and undo are deferred.
+admission before the event. Undoing a check-in is deferred.
 
 Scanner performance (SRS: check-in in about 2 s). The ticket, its event and
 organizer are resolved in one query; check-in is a single conditional
