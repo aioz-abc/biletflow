@@ -153,7 +153,8 @@ def checkout(user, order_id, outcome, promo_code=None):
     # Totals are always recomputed from purchase-time item prices; a client never
     # supplies a discount. The event is already locked above, so redemption counting
     # is serialized by exactly the same lock that protects seat inventory.
-    subtotal = sum(item.unit_price_minor * item.quantity for item in order.items.all())
+    items = list(order.items.all())
+    subtotal = sum(item.unit_price_minor * item.quantity for item in items)
     discount = 0
     redemption = None
     if promo_code is not None:
@@ -167,6 +168,11 @@ def checkout(user, order_id, outcome, promo_code=None):
     if redemption is not None:
         redemption.save()
         record_audit(event, user, "promo.redeemed", redemption)
+        kinds = set(code.campaign.ticket_types.values_list("pk", flat=True))
+        shares = allocate_discount(items, kinds, discount)
+        for item in items:
+            item.discount_minor = shares[item.pk]
+        OrderItem.objects.bulk_update(items, ["discount_minor"])
     if order.total_minor:
         payment = Payment.objects.create(
             order=order,
@@ -175,7 +181,7 @@ def checkout(user, order_id, outcome, promo_code=None):
         )
         record_audit(event, user, "payment.completed", payment, f"{payment.amount_minor} tiyn.")
     Ticket.objects.bulk_create(
-        [Ticket(order_item=item) for item in order.items.all() for _ in range(item.quantity)]
+        [Ticket(order_item=item) for item in items for _ in range(item.quantity)]
     )
     order.status = "confirmed"
     order.confirmed_at = timezone.now()
@@ -303,6 +309,30 @@ def discountable(order, campaign, subtotal):
         for item in order.items.all()
         if item.ticket_type_id in kinds
     )
+
+
+def allocate_discount(items, kinds, discount):
+    """Split an order's discount across its lines, in whole tiyn that add up exactly.
+
+    Only the lines the campaign covered share it (``kinds`` is its ticket-type ids;
+    empty means every type), in proportion to their subtotals, so a VIP-only code
+    never lands on General admission. Each share is rounded down, then the tiyn
+    left over go one at a time to the largest remainders, ties to the lower line id.
+    Returns {item.pk: share}, with 0 for lines the campaign did not cover.
+    """
+    shares = {item.pk: 0 for item in items}
+    lines = [item for item in items if not kinds or item.ticket_type_id in kinds]
+    base = sum(item.unit_price_minor * item.quantity for item in lines)
+    if not discount or not base:
+        return shares
+    exact = {item.pk: discount * item.unit_price_minor * item.quantity for item in lines}
+    for pk, numerator in exact.items():
+        shares[pk] = numerator // base
+    leftover = discount - sum(shares.values())
+    by_remainder = sorted(lines, key=lambda item: (-(exact[item.pk] % base), item.pk))
+    for item in by_remainder[:leftover]:
+        shares[item.pk] += 1
+    return shares
 
 
 def price_promo(order, subtotal, code_text):

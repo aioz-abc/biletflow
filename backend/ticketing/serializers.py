@@ -156,7 +156,7 @@ class TicketSerializer(serializers.ModelSerializer):
 class ItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = ["ticket_type", "quantity", "unit_price_minor"]
+        fields = ["ticket_type", "quantity", "unit_price_minor", "discount_minor"]
 
 
 class OrderSerializer(serializers.ModelSerializer):
