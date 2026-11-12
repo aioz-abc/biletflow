@@ -18,8 +18,8 @@ function MyEvents() {
   }, [])
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12">
-      <div className="flex items-center justify-between">
+    <main className="max-w-3xl">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold">My events</h1>
         <Link to="/organizer/events/new" className="rounded bg-black px-4 py-2 text-white">
           Create event
@@ -41,10 +41,12 @@ function MyEvents() {
                   {dateFmt.format(new Date(ev.starts_at))} · {ev.venue}
                 </span>
               </span>
-              <span className="flex gap-4 text-sm">
+              <span className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <Link to={`/organizer/events/${ev.id}`} className="text-indigo-600 underline">Sales</Link>
                 <Link to={`/organizer/events/${ev.id}/edit`} className="text-indigo-600 underline">
                   Edit &amp; tickets
                 </Link>
+                <Link to={`/organizer/events/${ev.id}/staff`} className="text-indigo-600 underline">Event Admins</Link>
                 {ev.published && (
                   <Link to={`/events/${ev.id}`} className="text-indigo-600 underline">Public page</Link>
                 )}

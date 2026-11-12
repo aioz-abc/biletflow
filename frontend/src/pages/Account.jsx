@@ -5,7 +5,11 @@ import { formatMoney } from '../utils/money'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
 
+const TICKET_STATUS = { valid: 'Valid', checked_in: 'Checked in', cancelled: 'Cancelled', refunded: 'Refunded' }
+const ORDER_STATUS = { pending: 'Awaiting payment', confirmed: 'Confirmed', cancelled: 'Cancelled', refunded: 'Refunded' }
+
 // /account — the attendee's tickets and orders (first page of each).
+
 function Account() {
   const [tickets, setTickets] = useState(null)
   const [orders, setOrders] = useState(null)
@@ -61,11 +65,11 @@ function Account() {
       ) : (
         <ul className="mt-6 divide-y rounded-xl border bg-white">
           {tickets.map((t) => (
-            <li key={t.id} className="flex items-center justify-between p-4">
+            <li key={t.id} className="flex flex-wrap items-center justify-between gap-2 p-4">
               <span>
                 <strong>{title(t.event)}</strong>
                 <span className="block text-sm text-gray-600">
-                  Ticket #{t.id} · {t.status === 'checked_in' ? 'Checked in' : t.status === 'valid' ? 'Valid' : t.status}
+                  Ticket #{t.id} · {TICKET_STATUS[t.status] ?? t.status}
                 </span>
               </span>
               <Link to={`/tickets/${t.id}`} className="text-indigo-600 underline">Show QR</Link>
@@ -78,9 +82,17 @@ function Account() {
       {orders.length === 0 ? <p className="mt-2 text-gray-600">No orders yet.</p> : (
         <ul className="mt-3 divide-y rounded-xl border bg-white text-sm">
           {orders.map((o) => (
-            <li key={o.id} className="flex justify-between p-3">
+            <li key={o.id} className="flex flex-wrap justify-between gap-2 p-3">
               <span>#{o.id} · {title(o.event)} · {dateFmt.format(new Date(o.created_at))}</span>
-              <span>{o.status} · {formatMoney(o.total_minor)}</span>
+              <span>
+                {ORDER_STATUS[o.status] ?? o.status} · {formatMoney(o.total_minor)}
+                {o.status !== 'pending' && (
+                  <>
+                    {' · '}
+                    <Link to={`/support/new?order=${o.id}`} className="text-indigo-600 underline">Get help</Link>
+                  </>
+                )}
+              </span>
             </li>
           ))}
         </ul>

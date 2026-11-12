@@ -126,7 +126,7 @@ function CreateEvent() {
   }
 
   return (
-    <main className="mx-auto grid max-w-7xl gap-8 px-6 py-10 md:grid-cols-2 md:divide-x md:divide-gray-300">
+    <main className="grid gap-8 md:grid-cols-2 md:divide-x md:divide-gray-300">
       <form onSubmit={saveDraft} className="space-y-4 rounded-lg bg-gray-200 p-6" noValidate>
         <h2 className="text-2xl">{id ? 'Edit Event' : 'Create Event'}</h2>
         <Input label="Event name" name="title" required maxLength={200}

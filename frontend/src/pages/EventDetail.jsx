@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth/auth'
+import AddToCalendar from '../components/AddToCalendar.jsx'
 import { formatMoney } from '../utils/money'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeStyle: 'short' })
@@ -104,6 +105,7 @@ function EventDetail() {
       <p className="mt-3 text-gray-600">
         {dateFmt.format(new Date(event.starts_at))} · {event.venue}
       </p>
+      <AddToCalendar event={event} className="mt-2" />
       {event.description && <p className="mt-6 whitespace-pre-line">{event.description}</p>}
 
       <h2 className="mt-10 text-xl font-semibold">Tickets</h2>

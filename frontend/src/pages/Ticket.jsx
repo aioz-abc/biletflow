@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '../api/client'
+import AddToCalendar from '../components/AddToCalendar.jsx'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'full', timeStyle: 'short' })
 const STATUS = { valid: 'Valid', checked_in: 'Checked in', cancelled: 'Cancelled', refunded: 'Refunded' }
@@ -63,6 +64,7 @@ function Ticket() {
             <h1 className="text-2xl font-bold">{event.title}</h1>
             <p className="mt-1 text-gray-600">{dateFmt.format(new Date(event.starts_at))}</p>
             <p className="text-gray-600">{event.venue}</p>
+            <AddToCalendar event={event} className="mt-2 justify-center" />
           </>
         ) : (
           <h1 className="text-2xl font-bold">
@@ -85,18 +87,25 @@ function Ticket() {
           <p className="mt-2 text-sm">Checked in {dateFmt.format(new Date(ticket.checked_in_at))}</p>
         )}
       </article>
-      {qrUrl && (
-        <a href={qrUrl} download={`biletflow-ticket-${ticket.id}.svg`}
-          className="mt-6 inline-block rounded bg-black px-5 py-2 text-white">
-          Download QR
-        </a>
-      )}
-      {pdfUrl && (
-        <a href={pdfUrl} download={`biletflow-ticket-${ticket.id}.pdf`}
-          className="ml-3 mt-6 inline-block rounded bg-emerald-800 px-5 py-2 text-white">
-          Download printable PDF
-        </a>
-      )}
+      <div className="mt-6 flex flex-wrap justify-center gap-3">
+        {qrUrl && (
+          <a href={qrUrl} download={`biletflow-ticket-${ticket.id}.svg`}
+            className="rounded bg-black px-5 py-2 text-white">
+            Download QR
+          </a>
+        )}
+        {pdfUrl && (
+          <a href={pdfUrl} download={`biletflow-ticket-${ticket.id}.pdf`}
+            className="rounded bg-emerald-800 px-5 py-2 text-white">
+            Download printable PDF
+          </a>
+        )}
+      </div>
+      <p className="mt-6 text-sm">
+        <Link to={`/support/new?ticket=${ticket.id}`} className="text-indigo-600 underline">
+          Problem with this ticket? Contact the organizer
+        </Link>
+      </p>
     </main>
   )
 }
