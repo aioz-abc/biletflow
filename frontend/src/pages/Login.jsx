@@ -48,11 +48,10 @@ function Login() {
         <div className="relative">
           <Field label="Password" name="password" type="password" autoComplete="current-password" required
             value={form.password} onChange={update} error={errors.password} />
-          {/* Backend has no password reset yet (BACKEND_MVP_API.md, Accounts) */}
-          <button type="button" disabled title="Password reset is not available yet"
-            className="absolute right-3 top-2.5 text-sm text-indigo-700 underline opacity-60">
+          <Link to="/forgot-password" state={location.state}
+            className="absolute right-3 top-2.5 text-sm text-indigo-700 underline">
             Forgot?
-          </button>
+          </Link>
         </div>
         {errors.form && <p role="alert" className="text-sm text-red-600">{errors.form}</p>}
         <button disabled={submitting} className="w-full rounded bg-gray-200 py-2.5 text-lg disabled:opacity-50">

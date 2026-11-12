@@ -21,6 +21,14 @@
 пока не установлена. Адреса `/api/...` ниже — реально реализованные backend
 routes; маршруты экранов перечислены в `frontend/src/App.jsx`.
 
+Экраны организатора вложены в общую оболочку
+`frontend/src/components/OrganizerLayout.jsx` (боковое меню + `<Outlet />`).
+Экраны аналитики Мирата добавляются в неё дочерним маршрутом в `App.jsx` и
+пунктом меню. Адреса `/organizer/analytics` и `/organizer/history` пока
+перехватывает `main.jsx` для прототипа Мирата, поэтому новый экран должен либо
+заменить прототип, либо получить другой адрес. Промокампании
+(`/organizer/campaigns/new`) по-прежнему отдельная страница со своим входом.
+
 ## 2. Локальный запуск и соединение
 
 Из корня репозитория:
@@ -47,10 +55,16 @@ Backend: `http://127.0.0.1:8000`. Проверка: `GET /api/health` возвр
 BILETFLOW_API_TARGET=http://127.0.0.1:8001 npm run dev
 ```
 
-Работают: `/register`, `/login`, `/events/:id` (выбор билетов, промокод из
-Campaign QR), `/checkout/:orderId`, `/tickets/:id`, `/account`,
-`/organizer/events`, `/organizer/events/new` и `/organizer/events/:id/edit`
-(включая тарифы). Экраны attendees и check-in из таблицы ниже ещё не сделаны.
+Работают: `/register`, `/login`, `/forgot-password`, `/reset-password`,
+`/events/:id` (выбор билетов, промокод из Campaign QR), `/checkout/:orderId`,
+`/tickets/:id`, `/account`, `/support`, `/support/new`, `/support/:id`, кабинет
+организатора `/organizer` (обзор продаж), `/organizer/events`,
+`/organizer/events/new`, `/organizer/events/:id` (продажи события),
+`/organizer/events/:id/edit` (включая тарифы) и `/organizer/events/:id/staff`
+(Event Admins). Экраны attendees и check-in из таблицы ниже на web не сделаны:
+вход на событии выполняется в мобильном приложении. На `/events/:id` и
+`/tickets/:id` есть экспорт в календарь (.ics и ссылка Google Calendar),
+файл собирается в браузере и отдельного API не требует.
 
 Frontend должен обращаться к относительным `/api/...`. Прямой вызов порта
 8000 из браузера с другого origin потребует CORS, которого сейчас нет.
@@ -69,14 +83,22 @@ Frontend должен обращаться к относительным `/api/.
 | --- | --- | --- |
 | `/register` | POST `/auth/register` | Тип аккаунта, email, пароль; для организатора профиль |
 | `/login` | POST `/auth/login` | Войти, сохранить сессию, вернуться на исходный экран |
+| `/forgot-password` | POST `/auth/reset-password` | Запросить код сброса; ответ одинаковый для любого email |
+| `/reset-password` | POST `/auth/reset-password/confirm` | Новый пароль по `uid` и `token` из `?uid=&token=` или из вставленного текста письма |
 | `/events` | GET `/events?page=1` | Опубликованные события, пустой список и пагинация |
 | `/events/:id` | GET `/events/:id`, GET `/events/:id/ticket-types` | Описание, даты, место, цены, остатки и выбор количества |
 | `/checkout/:orderId` | GET `/orders/:id`, POST `/orders/:id/preview`, POST `/orders/:id/checkout`, POST `/orders/:id/cancel` | Серверная сумма со скидкой до оплаты, срок резерва, результат симуляции |
-| `/tickets/:id` | GET `/tickets/:id`, GET `/tickets/:id/qr` | QR, номер, статус; сведения о событии загрузить отдельно |
-| `/account` | GET `/me/orders`, GET `/me/tickets` | Свои заказы и билеты, переход к незавершённому заказу |
+| `/tickets/:id` | GET `/tickets/:id`, GET `/tickets/:id/qr`, GET `/tickets/:id/pdf` | QR, номер, статус, печатный PDF, экспорт в календарь; сведения о событии загрузить отдельно |
+| `/account` | GET `/me/orders`, GET `/me/tickets` | Свои заказы и билеты, переход к незавершённому заказу, «Get help» по заказу |
+| `/support` | GET `/support-cases?status=` | Свои обращения; организатору также обращения по его событиям |
+| `/support/new?ticket=` / `?order=` / `?event=` | POST `/support-cases` | Открыть обращение; без ссылки выбрать заказ, организатор может писать платформе |
+| `/support/:id` | GET `/support-cases/:id`, GET/POST `/support-cases/:id/messages`, PATCH `/support-cases/:id`, GET `/events/:id/staff` | Переписка, опрос `?after=` раз в 10 секунд, статус и назначение обновляются не реже раза в 30 секунд; статус и назначение только для стороны поддержки. Владелец события выбирает исполнителя из Event Admins с правом поддержки; Event Admin (для него staff API отвечает 404) может только взять обращение себе |
+| `/organizer` | GET `/me/events`, GET `/events/:id/sales` | Кабинет организатора: события, продано/вместимость, выручка, ожидаемая выплата |
+| `/organizer/events/:id` | GET `/events/:id`, GET `/events/:id/sales` | Продажи события: скидки, возвраты, комиссии, разбивка по тарифам |
 | `/organizer/events` | GET `/me/events` | Свои события, включая черновики |
 | `/organizer/events/new` | POST `/events` | Создать черновик |
 | `/organizer/events/:id/edit` | GET/PATCH `/events/:id`, POST `/events/:id/publish` | Изменить поля и отдельно опубликовать/снять с публикации |
+| `/organizer/events/:id/staff` | GET/POST `/events/:id/staff`, DELETE `/events/:id/staff/:user_id` | Event Admins события: добавить существующий аккаунт по email с правами check-in и/или поддержки, удалить. Изменить права = удалить и добавить снова |
 | Тарифы внутри редактирования | GET/POST `/events/:id/ticket-types`, PATCH `/ticket-types/:id` | Создать/редактировать/скрыть тип билетов |
 | `/organizer/events/:id/attendees` | GET `/events/:id/attendees` | Выданные билеты и статусы прохода |
 | `/organizer/check-in` | POST `/tickets/verify`, POST `/tickets/check-in` | Ввод или сканирование QR и подтверждение прохода |
@@ -383,6 +405,8 @@ JSON. Не вставлять описание события или текст 
 - [ ] Организатор проверяет билет, повторный проход отклоняется.
 - [ ] Чужие объекты, отсутствующие записи, сетевые ошибки и пустые списки обработаны.
 - [ ] Основной сценарий работает на узком экране, формы имеют подписи и доступны с клавиатуры.
+- [ ] Организатор добавляет Event Admin; тот входит в сканер и/или отвечает на обращения своего события.
+- [ ] Обращение из билета доходит до организатора/Event Admin, ответ и смена статуса видны посетителю без перезагрузки.
 - [ ] `npm run build` и `npm run lint` проходят после реализации.
 
 Проверка backend отдельно от интерфейса:
@@ -395,5 +419,5 @@ docker compose exec -T web python demo_mvp.py
 готовые login/password для ручного входа: для работы через UI создать свои аккаунты.
 
 В текущем MVP отсутствуют upload обложек, поиск, личные данные держателей,
-профильное редактирование, PDF и рассадка. Эти элементы требуют расширения
+профильное редактирование и рассадка. Эти элементы требуют расширения
 backend и не должны отображаться как работающие функции.
