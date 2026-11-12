@@ -116,33 +116,42 @@ docker compose exec -T web python manage.py seed_demo
 
 ## Деплой на Heroku
 
-Production-сборка — один контейнер (`Dockerfile.heroku`, `heroku.yml`): Vite собирает
-React, Django + WhiteNoise отдают его с того же домена, что и `/api`, gunicorn
-обслуживает запросы, миграции выполняются в release-фазе. Django admin — на
-`/django-admin/`, `/admin` — админка Мирата во фронтенде.
+Живое демо: <https://begemot-b8b43e7ea8ea.herokuapp.com> (приложение `begemot`,
+регион EU, Basic dyno + Postgres Essential-0, ~$12/мес из студенческих кредитов).
 
-Один раз (нужен Heroku CLI и `heroku login`):
+Production-сборка — один контейнер (`Dockerfile.heroku`): Vite собирает React,
+Django + WhiteNoise отдают его с того же домена, что и `/api`, gunicorn обслуживает
+запросы. Django admin — на `/django-admin/`, `/admin` — админка Мирата во фронтенде.
+Config vars: `DATABASE_URL` (от аддона), `DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`,
+`FRONTEND_BASE_URL`, `DEMO_PASSWORD`.
 
-```bash
-heroku create biletflow-demo --stack container --region eu
-heroku addons:create heroku-postgresql:essential-0 -a biletflow-demo
-heroku config:set -a biletflow-demo DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(50))')"
-heroku config:set -a biletflow-demo DJANGO_ALLOWED_HOSTS=<host из heroku apps:info> FRONTEND_BASE_URL=https://<host>
-heroku ps:type web=basic -a biletflow-demo
-```
-
-Деплой и демо-данные:
+Новая версия (нужны Docker, Heroku CLI и `heroku login`). Образ собирается локально
+и загружается в Heroku Container Registry: `git push heroku` с git из Xcode на macOS
+не работает (известная ошибка Apple Git-146).
 
 ```bash
-git push https://git.heroku.com/biletflow-demo.git HEAD:main
-heroku run -a biletflow-demo -- python manage.py seed_demo --password "$(heroku config:get DEMO_PASSWORD -a biletflow-demo)"
+heroku container:login
+docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
+  -f Dockerfile.heroku -t registry.heroku.com/begemot/web \
+  --output type=registry,oci-mediatypes=false .
+heroku container:release web -a begemot
+heroku run:detached -a begemot -- python manage.py migrate --noinput
 ```
 
-Пароль демо-аккаунтов хранится только в config var `DEMO_PASSWORD`, не в Git.
-Остановить расходы: `heroku ps:scale web=0`; база (Essential-0) продолжает
-списывать до $5/мес, пока не удалена (`heroku pg:backups:capture` перед удалением).
-Письма — симуляция, видны в `heroku logs --tail`. Мобильному приложению нужно
-указать адрес Heroku вместо `localhost:8000`.
+С обычным git (Linux, git с git-scm.com) работает и `git push heroku <ветка>:main`:
+тогда `heroku.yml` собирает тот же образ и сам запускает миграции.
+
+Демо-данные (пароль демо-аккаунтов хранится только в config var `DEMO_PASSWORD`,
+посмотреть: `heroku config:get DEMO_PASSWORD -a begemot`):
+
+```bash
+heroku run:detached -a begemot -- 'sh -c "python manage.py seed_demo --password \"$DEMO_PASSWORD\""'
+```
+
+Остановить расходы: `heroku ps:scale web=0 -a begemot` (dyno не тарифицируется);
+база Essential-0 списывает до $5/мес, пока не удалена — перед удалением
+`heroku pg:backups:capture`. Письма — симуляция, видны в `heroku logs --tail`.
+Мобильному приложению нужно указать адрес Heroku вместо `localhost:8000`.
 
 ## Документация
 
