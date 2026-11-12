@@ -102,12 +102,19 @@ class OrderItem(models.Model):
     ticket_type = models.ForeignKey(TicketType, on_delete=models.PROTECT)
     quantity = models.PositiveIntegerField()
     unit_price_minor = models.PositiveBigIntegerField()
+    # This line's share of Order.discount_minor, fixed at checkout. Stored rather than
+    # recomputed because a campaign's ticket types can be edited after it was used.
+    discount_minor = models.PositiveBigIntegerField(default=0)
 
     class Meta:
         ordering = ["pk"]
         constraints = [
             models.CheckConstraint(condition=Q(quantity__gt=0), name="item_quantity_positive"),
             models.UniqueConstraint(fields=["order", "ticket_type"], name="one_type_per_order"),
+            models.CheckConstraint(
+                condition=Q(discount_minor__lte=F("unit_price_minor") * F("quantity")),
+                name="item_discount_within_subtotal",
+            ),
         ]
 
 
