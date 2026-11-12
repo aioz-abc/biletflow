@@ -75,7 +75,7 @@ function EventSales() {
           No ticket types yet. <Link to={`/organizer/events/${id}/edit`} className="text-indigo-600 underline">Add one</Link>
         </p>
       ) : (
-        <div className="mt-3 overflow-x-auto rounded-xl border bg-white">
+        <div className="relative mt-3 overflow-x-auto rounded-xl border bg-white">
           <table className="w-full text-left text-sm">
             <thead className="border-b bg-gray-50 text-gray-600">
               <tr>

@@ -63,7 +63,8 @@ function Dashboard() {
           You have no events yet. <Link to="/organizer/events/new" className="text-indigo-600 underline">Create one</Link>
         </p>
       ) : (
-        <div className="mt-8 overflow-x-auto rounded-xl border bg-white">
+        <div className="relative mt-8 overflow-x-auto rounded-xl border bg-white">
+          {/* relative: keeps the absolutely positioned sr-only header inside this scroll box on phones */}
           <table className="w-full text-left text-sm">
             <thead className="border-b bg-gray-50 text-gray-600">
               <tr>
