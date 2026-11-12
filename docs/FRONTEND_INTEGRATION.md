@@ -23,10 +23,10 @@ routes; маршруты экранов перечислены в `frontend/src/
 
 Экраны организатора вложены в общую оболочку
 `frontend/src/components/OrganizerLayout.jsx` (боковое меню + `<Outlet />`).
-Экраны аналитики Мирата добавляются в неё дочерним маршрутом в `App.jsx` и
-пунктом меню. Адреса `/organizer/analytics` и `/organizer/history` пока
-перехватывает `main.jsx` для прототипа Мирата, поэтому новый экран должен либо
-заменить прототип, либо получить другой адрес. Промокампании
+Экраны аналитики Мирата добавлены в неё дочерними маршрутами в `App.jsx` и
+пунктами меню. Адреса `/organizer/analytics` и `/organizer/history` используют
+реальные API аналитики и аудита; старые статические прототипы удалены из
+перехвата `main.jsx`. Промокампании
 (`/organizer/campaigns/new`) по-прежнему отдельная страница со своим входом.
 
 ## 2. Локальный запуск и соединение
@@ -61,7 +61,7 @@ BILETFLOW_API_TARGET=http://127.0.0.1:8001 npm run dev
 организатора `/organizer` (обзор продаж), `/organizer/events`,
 `/organizer/events/new`, `/organizer/events/:id` (продажи события),
 `/organizer/events/:id/edit` (включая тарифы) и `/organizer/events/:id/staff`
-(Event Admins). Экраны attendees и check-in из таблицы ниже на web не сделаны:
+(Event Admins), `/organizer/analytics` и `/organizer/history`. Экраны attendees и check-in из таблицы ниже на web не сделаны:
 вход на событии выполняется в мобильном приложении. На `/events/:id` и
 `/tickets/:id` есть экспорт в календарь (.ics и ссылка Google Calendar),
 файл собирается в браузере и отдельного API не требует.
@@ -99,6 +99,8 @@ Frontend должен обращаться к относительным `/api/.
 | `/organizer/events/new` | POST `/events` | Создать черновик |
 | `/organizer/events/:id/edit` | GET/PATCH `/events/:id`, POST `/events/:id/publish` | Изменить поля и отдельно опубликовать/снять с публикации |
 | `/organizer/events/:id/staff` | GET/POST `/events/:id/staff`, DELETE `/events/:id/staff/:user_id` | Event Admins события: добавить существующий аккаунт по email с правами check-in и/или поддержки, удалить. Изменить права = удалить и добавить снова |
+| `/organizer/analytics?event=:id` | GET `/me/events`, GET `/events/:id/ticket-types`, GET `/events/:id/analytics?from=&to=&ticket_type=` | Продажи по дням/тарифам, кампании, остатки и check-in; даты — включительно `from`, исключительно `to`; текущий inventory отделён от показателей периода |
+| `/organizer/history` | GET `/me/events`, GET `/events/:id/audit-log?page=` | Статусы событий и неизменяемая лента публикаций, изменений, возвратов, кампаний и check-in; более старые страницы загружаются по кнопке |
 | Тарифы внутри редактирования | GET/POST `/events/:id/ticket-types`, PATCH `/ticket-types/:id` | Создать/редактировать/скрыть тип билетов |
 | `/organizer/events/:id/attendees` | GET `/events/:id/attendees` | Выданные билеты и статусы прохода |
 | `/organizer/check-in` | POST `/tickets/verify`, POST `/tickets/check-in` | Ввод или сканирование QR и подтверждение прохода |

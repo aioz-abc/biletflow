@@ -13,6 +13,8 @@ export default function OrganizerLayout() {
           <li><NavLink to="/organizer" end className={linkClass}>Overview</NavLink></li>
           <li><NavLink to="/organizer/events" end className={linkClass}>My events</NavLink></li>
           <li><NavLink to="/organizer/events/new" className={linkClass}>Create event</NavLink></li>
+          <li><NavLink to="/organizer/analytics" className={linkClass}>Analytics</NavLink></li>
+          <li><NavLink to="/organizer/history" className={linkClass}>Event history</NavLink></li>
           <li><NavLink to="/support" className={linkClass}>Support cases</NavLink></li>
           {/* Mirat's campaign portal is a separate page with its own login (main.jsx) */}
           <li>
