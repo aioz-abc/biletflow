@@ -5,6 +5,7 @@ import { useAuth } from '../auth/auth'
 import {
   ATTENDEE_CATEGORIES, PLATFORM_CATEGORIES, STATUSES, caseHeader, isSupportSide, mergeMessages, statusLabel,
 } from '../utils/support'
+import { supportAssignees } from '../utils/staff'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
 const POLL_MS = 10000 // the API has no websockets; clients poll ?after=
@@ -21,6 +22,7 @@ function CaseThread({ id }) {
   const [error, setError] = useState(null)
   const [actionError, setActionError] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [assignees, setAssignees] = useState(null) // null: may only assign self
   const lastId = useRef(0)
   const bottom = useRef(null)
 
@@ -56,6 +58,20 @@ function CaseThread({ id }) {
       clearInterval(timer)
     }
   }, [id, addMessages])
+
+  // The event owner (or a platform admin) may hand the case to an Event Admin
+  // with support rights. Event Admins cannot list staff (404): they keep
+  // "Assign to me".
+  const eventId = supportCase?.event
+  const supportSide = supportCase ? isSupportSide(supportCase, user) : false
+  useEffect(() => {
+    if (!eventId || !supportSide) return
+    let active = true
+    api(`/events/${eventId}/staff`)
+      .then((page) => active && setAssignees(supportAssignees(user, page.results)))
+      .catch(() => {})
+    return () => { active = false }
+  }, [eventId, supportSide, user])
 
   useEffect(() => {
     bottom.current?.scrollIntoView?.({ block: 'nearest' })
@@ -129,7 +145,20 @@ function CaseThread({ id }) {
                 {Object.entries(STATUSES).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
               </select>
             </label>
-            {supportCase.assigned_to === user.id ? (
+            {assignees ? (
+              <label>
+                <span className="sr-only">Assigned to</span>
+                <select value={supportCase.assigned_to ?? ''} disabled={busy}
+                  onChange={(e) => change({ assigned_to: e.target.value ? Number(e.target.value) : null })}
+                  className="max-w-full rounded border bg-white px-2 py-1">
+                  <option value="">Not assigned</option>
+                  {assignees.map((a) => <option key={a.id} value={a.id}>{a.label}</option>)}
+                  {supportCase.assigned_to && !assignees.some((a) => a.id === supportCase.assigned_to) && (
+                    <option value={supportCase.assigned_to}>{supportCase.assigned_to_email}</option>
+                  )}
+                </select>
+              </label>
+            ) : supportCase.assigned_to === user.id ? (
               <button type="button" disabled={busy} onClick={() => change({ assigned_to: null })}
                 className="text-indigo-600 underline disabled:opacity-50">Unassign me</button>
             ) : (
