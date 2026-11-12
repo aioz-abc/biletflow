@@ -1,124 +1,189 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, Button, TouchableOpacity, Pressable, TextInput, Platform } from 'react-native';
+import {
+  StyleSheet,
+  Text,
+  View,
+  TextInput,
+  TouchableOpacity,
+  ActivityIndicator,
+  Platform,
+} from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import { verifyTicket, checkInTicket, Ticket } from './services/ticketService';
 
 interface ScanScreenProps {
+  authToken?: string;
   onBack: () => void;
-  onScanSuccess: (data: string) => void;
+  onScanSuccess?: (code: string) => void;
 }
 
-export default function ScanScreen({ onBack, onScanSuccess }: ScanScreenProps) {
+export default function ScanScreen({ authToken, onBack, onScanSuccess }: ScanScreenProps) {
   const [permission, requestPermission] = useCameraPermissions();
-  const [scanned, setScanned] = useState(false);
-  const [manualCode, setManualCode] = useState('');
+  const [qrInput, setQrInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [scannedTicket, setScannedTicket] = useState<Ticket | null>(null);
+  const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const [statusType, setStatusType] = useState<'success' | 'error' | 'warning' | null>(null);
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
-    setScanned(true);
-    onScanSuccess(data);
+  const processQrCode = async (tokenToVerify: string) => {
+    if (!tokenToVerify.trim()) return;
+    setLoading(true);
+    setStatusMessage(null);
+    setScannedTicket(null);
+
+    if (onScanSuccess) {
+      onScanSuccess(tokenToVerify);
+    }
+
+    try {
+      // Direct API verification against backend
+      const result = await verifyTicket(tokenToVerify, authToken || 'dev-token');
+      setScannedTicket(result.ticket);
+
+      if (result.valid && result.ticket.status === 'valid') {
+        setStatusMessage('Ticket Verified! Ready for Check-In.');
+        setStatusType('success');
+      } else {
+        setStatusMessage(`Ticket Status: ${result.ticket.status.toUpperCase()}`);
+        setStatusType('warning');
+      }
+    } catch (err: any) {
+      // Graceful fallback for offline / mock testing
+      setStatusMessage(err.message || 'Verification error or offline QR');
+      setStatusType('error');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleManualSubmit = () => {
-    if (!manualCode.trim()) return;
-    setScanned(true);
-    onScanSuccess(manualCode.trim());
+  const handleConfirmCheckIn = async () => {
+    if (!qrInput) return;
+    setLoading(true);
+
+    try {
+      const updatedTicket = await checkInTicket(
+        qrInput,
+        authToken || 'dev-token',
+        scannedTicket?.id
+      );
+      setScannedTicket(updatedTicket);
+      setStatusMessage('Check-In Confirmed Successfully!');
+      setStatusType('success');
+    } catch (err: any) {
+      setStatusMessage(err.message || 'Check-in failed');
+      setStatusType('error');
+    } finally {
+      setLoading(false);
+    }
   };
-
-  if (!permission) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.text}>Requesting camera permission...</Text>
-      </View>
-    );
-  }
-
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.text}>Camera access is required to scan QR tickets.</Text>
-        <Button title="Grant Permission" onPress={requestPermission} />
-        <View style={styles.spacer} />
-        <Button title="Back to Events" onPress={onBack} color="#666" />
-      </View>
-    );
-  }
 
   return (
     <View style={styles.container}>
-      <View style={styles.header}>
-        <Pressable onPress={onBack} style={styles.backButton} hitSlop={15}>
-          <Text style={styles.backButtonText}>← Back</Text>
-        </Pressable>
-        <Text style={styles.title}>Scan Ticket QR</Text>
-      </View>
+      <TouchableOpacity style={styles.backButton} onPress={onBack}>
+        <Text style={styles.backText}>← Back</Text>
+      </TouchableOpacity>
 
-      {/* Render camera on native mobile; show fallback message on web */}
-      {Platform.OS !== 'web' ? (
-        <CameraView
-          style={styles.camera}
-          facing="back"
-          onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
-        >
-          <View style={styles.overlay}>
-            <View style={styles.targetFrame} />
-          </View>
-        </CameraView>
+      <Text style={styles.title}>Scan Ticket QR</Text>
+
+      {/* Camera View for native mobile devices */}
+      {Platform.OS !== 'web' && permission?.granted ? (
+        <View style={styles.cameraContainer}>
+          <CameraView
+            style={styles.camera}
+            onBarcodeScanned={({ data }) => {
+              if (data && data !== qrInput) {
+                setQrInput(data);
+                processQrCode(data);
+              }
+            }}
+          />
+        </View>
       ) : (
-        <View style={styles.webFallback}>
+        <View style={styles.webFallbackContainer}>
           <Text style={styles.webFallbackText}>
-            Camera preview disabled in web browser. Use manual payload entry below to simulate QR scans.
+            {Platform.OS === 'web'
+              ? '📷 Camera active on mobile device'
+              : 'Permission needed for camera'}
           </Text>
+          {!permission?.granted && Platform.OS !== 'web' && (
+            <TouchableOpacity style={styles.permButton} onPress={requestPermission}>
+              <Text style={styles.permButtonText}>Grant Camera Permission</Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 
-      {/* Manual Fallback for testing */}
-      <View style={styles.controlsContainer}>
-        <Text style={styles.subLabel}>Test QR Payload / Manual Entry:</Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            testID="manual-input"
-            style={styles.input}
-            placeholder="e.g. TICKET-UUID-12345"
-            value={manualCode}
-            onChangeText={setManualCode}
-          />
-          <TouchableOpacity
-            testID="simulate-button"
-            style={styles.simulateButton}
-            onPress={handleManualSubmit}
-          >
-            <Text style={styles.simulateButtonText}>Simulate Scan</Text>
-          </TouchableOpacity>
-        </View>
-
-        {scanned && (
-          <TouchableOpacity style={styles.rescanButton} onPress={() => setScanned(false)}>
-            <Text style={styles.rescanButtonText}>Tap to Scan Again</Text>
-          </TouchableOpacity>
-        )}
+      {/* Manual Input Controls for development and automated testing */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          testID="manual-input"
+          style={styles.input}
+          placeholder="e.g. TICKET-UUID-12345"
+          value={qrInput}
+          onChangeText={setQrInput}
+        />
+        <TouchableOpacity
+          testID="simulate-button"
+          style={styles.button}
+          onPress={() => processQrCode(qrInput)}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Verify / Simulate Scan</Text>
+          )}
+        </TouchableOpacity>
       </View>
+
+      {/* Real-time Status Feedback Banner */}
+      {statusMessage && (
+        <View style={[styles.badge, styles[statusType || 'warning']]}>
+          <Text style={styles.badgeText}>{statusMessage}</Text>
+        </View>
+      )}
+
+      {/* Confirm Check-in Action */}
+      {scannedTicket && scannedTicket.status === 'valid' && (
+        <TouchableOpacity
+          style={[styles.button, styles.checkInButton]}
+          onPress={handleConfirmCheckIn}
+          disabled={loading}
+        >
+          <Text style={styles.buttonText}>Confirm Check-In</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#000', paddingTop: 50 },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, marginBottom: 10, zIndex: 10 },
-  backButton: { marginRight: 15, padding: 5, cursor: 'pointer' as any },
-  backButtonText: { color: '#2196F3', fontSize: 16, fontWeight: 'bold' },
-  title: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
-  text: { color: '#fff', textAlign: 'center', marginVertical: 20 },
-  spacer: { height: 10 },
+  container: { flex: 1, padding: 20, backgroundColor: '#fff', justifyContent: 'center' },
+  backButton: { position: 'absolute', top: 50, left: 20, zIndex: 10 },
+  backText: { fontSize: 16, color: '#007AFF', fontWeight: 'bold' },
+  title: { fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 20, marginTop: 40 },
+  cameraContainer: { height: 220, borderRadius: 12, overflow: 'hidden', marginBottom: 20 },
   camera: { flex: 1 },
-  overlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' },
-  targetFrame: { width: 220, height: 220, borderWidth: 2, borderColor: '#00FF00', backgroundColor: 'transparent' },
-  webFallback: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20, backgroundColor: '#222' },
-  webFallbackText: { color: '#aaa', textAlign: 'center', fontSize: 14 },
-  controlsContainer: { backgroundColor: '#111', padding: 20, zIndex: 10 },
-  subLabel: { color: '#ccc', fontSize: 12, marginBottom: 5 },
-  inputRow: { flexDirection: 'row', marginBottom: 10 },
-  input: { flex: 1, backgroundColor: '#fff', padding: 10, borderRadius: 5, marginRight: 10 },
-  simulateButton: { backgroundColor: '#2196F3', paddingHorizontal: 15, justifyContent: 'center', alignItems: 'center', borderRadius: 5 },
-  simulateButtonText: { color: '#fff', fontWeight: 'bold' },
-  rescanButton: { backgroundColor: '#333', padding: 10, borderRadius: 5, alignItems: 'center', marginTop: 5 },
-  rescanButtonText: { color: '#2196F3', fontWeight: 'bold' }
+  webFallbackContainer: {
+    height: 120,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+    padding: 10,
+  },
+  webFallbackText: { color: '#666', fontSize: 14, textAlign: 'center' },
+  permButton: { marginTop: 10, backgroundColor: '#007AFF', padding: 8, borderRadius: 6 },
+  permButtonText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  inputContainer: { marginBottom: 10 },
+  input: { borderWidth: 1, borderColor: '#ccc', borderRadius: 8, padding: 12, marginBottom: 10 },
+  button: { backgroundColor: '#007AFF', padding: 15, borderRadius: 8, alignItems: 'center' },
+  checkInButton: { backgroundColor: '#28a745', marginTop: 15 },
+  buttonText: { color: '#fff', fontWeight: 'bold', fontSize: 16 },
+  badge: { padding: 12, borderRadius: 8, marginTop: 10, alignItems: 'center' },
+  success: { backgroundColor: '#d4edda' },
+  warning: { backgroundColor: '#fff3cd' },
+  error: { backgroundColor: '#f8d7da' },
+  badgeText: { fontWeight: '600', textAlign: 'center' },
 });
