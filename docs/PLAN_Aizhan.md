@@ -75,5 +75,18 @@ PostgreSQL.
 
 ## Phase 6 (Nov 10–16) — Stabilize 📍 Final (Nov 16)
 
-- Fix remaining bugs in checkout/refund/promo logic, add any missing
-  validation, help rehearse the demo's core purchase flow.
+- ✅ Fixed remaining bugs in checkout/refund/promo logic and added the missing
+  validation (branch `aizhan/phase6-stabilize`): refunded or cancelled orders
+  give their promo-code use back, `max_redemptions` cannot drop below current
+  use, a campaign needs a paid ticket type, a ticket type's sales cannot open
+  after the event starts, an attendee cannot cancel a registration once the
+  event has started, and a 100%-discounted order is no longer reported as a free
+  registration.
+- ✅ Closed an integration gap found in the rehearsal: refunds and cancellations
+  (SRS 4.9) had no web UI. Added `GET /api/events/{id}/orders` with the allowed
+  action per order, an Orders table with Refund / Cancel registration on the
+  organizer's event page, and Cancel registration in the attendee's account.
+- ✅ Rehearsed the core purchase flow on a fresh `seed_demo`: attendee buys two
+  Standard tickets for Jazz Night with `DEMO10` (16 000 ₸ → 14 400 ₸), tickets
+  are issued, the organizer refunds the order from the web page, and the sales
+  summary and inventory update at once. `demo_mvp.py` passes.

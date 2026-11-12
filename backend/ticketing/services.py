@@ -419,7 +419,7 @@ def price_promo(order, subtotal, code_text):
         raise ValidationError({"promo_code": "This code has expired."})
     if (
         campaign.max_redemptions is not None
-        and campaign.redemptions.count() >= campaign.max_redemptions
+        and live_redemptions(campaign) >= campaign.max_redemptions
     ):
         raise Conflict("This code has reached its redemption limit.")
     base = discountable(order, campaign, subtotal)
@@ -432,6 +432,28 @@ def price_promo(order, subtotal, code_text):
     return code, min(discount, subtotal)
 
 
+def order_action(order):
+    """What an organizer can still do with an order: "refund", "cancel" or None.
+
+    Mirrors refund_order/cancel_order (SRS 4.9): a paid order is refunded, a free one
+    cancelled, and an order with a checked-in ticket is final. Expects the
+    ``has_payment`` and ``checked_in`` annotations from the event orders list.
+    """
+    if order.status != "confirmed" or order.checked_in:
+        return None
+    return "refund" if order.has_payment else "cancel"
+
+
+def live_redemptions(campaign):
+    """Redemptions that still count toward ``max_redemptions``.
+
+    A refunded or cancelled order gives its use back, so a "first 50 buyers" code is
+    not used up by orders that were later undone. Reporting still lists every
+    redemption; only the limit ignores the undone ones.
+    """
+    return campaign.redemptions.exclude(order__status__in=["refunded", "cancelled"]).count()
+
+
 def invalidate_tickets(order, status):
     return Ticket.objects.filter(order_item__order=order).update(status=status)
 
@@ -440,11 +462,13 @@ def invalidate_tickets(order, status):
 def cancel_order(user, order_id):
     initial = get_object_or_404(Order, pk=order_id)
     event = Event.objects.select_for_update().get(pk=initial.event_id)
-    if user.pk != initial.purchaser_id and not (
-        user.is_superuser or event.organizer.user_id == user.pk
-    ):
+    manager = user.is_superuser or event.organizer.user_id == user.pk
+    if user.pk != initial.purchaser_id and not manager:
         raise NotFound()
     order = Order.objects.select_for_update().get(pk=order_id)
+    if order.status == "confirmed" and not manager and event.starts_at <= timezone.now():
+        # The seat was held until the doors opened; the organizer can still cancel.
+        raise Conflict("The event has started; the registration can no longer be cancelled.")
     if order.status == "confirmed":
         # SRS 4.9 allows cancelling free registrations; paid orders must go through
         # the refund endpoint so a Refund row and its audit entry are always created.
@@ -511,7 +535,7 @@ def campaign_active(campaign):
         and (campaign.ends_at is None or campaign.ends_at > now)
         and (
             campaign.max_redemptions is None
-            or campaign.redemptions.count() < campaign.max_redemptions
+            or live_redemptions(campaign) < campaign.max_redemptions
         )
     )
 
@@ -582,7 +606,8 @@ def sales_summary(event):
         "simulated": True,
         "processing_fee_bps": settings.PROCESSING_FEE_BPS,
         "paid_orders": totals["count"],
-        "free_registrations": event.orders.filter(status="confirmed", total_minor=0).count(),
+        # By list price: an order made free by a 100% promo code is a discounted sale.
+        "free_registrations": event.orders.filter(status="confirmed", subtotal_minor=0).count(),
         "refunded_orders": refunded.count(),
         "gross_minor": gross,
         "discounts_minor": totals["discounts"] or 0,

@@ -72,6 +72,7 @@ approved pet-project MVP.
 | GET `/me/events` | Organizer's events (all events for platform admin) |
 | GET `/events/{id}/attendees` | Owner/admin list of issued tickets and check-in statuses |
 | GET `/events/{id}/sales` | Owner/admin simulated sales summary: gross, discounts, refunds, fees, estimated payout, per-type breakdown |
+| GET `/events/{id}/orders` | Owner/admin list of confirmed, cancelled and refunded orders with the action still allowed (see Cancellations and refunds) |
 | GET/POST `/events/{id}/staff` | Owner/platform admin lists assignments or grants Event Admin to an existing active user by `{email, can_check_in, can_manage_support}` (support defaults to false) |
 | DELETE `/events/{id}/staff/{user_id}` | Owner/platform admin removes an assignment, 204 |
 
@@ -121,6 +122,8 @@ Create ticket type:
 
 Name and quantity are required; price defaults to zero (free), max_per_order
 to 10, hidden to false. Quantity can be zero; max_per_order is 1–100.
+`sales_start` must be before the event starts (otherwise the type could never be
+sold) and before `sales_end` when both are set.
 Responses include event ID and available, limited by both type inventory and
 event capacity. They also include `stats` (SRS 4.3): for the event owner or a
 platform admin it is an object, for everyone else `null`:
@@ -215,7 +218,8 @@ before this change were backfilled by migration 0005 with the same rule.
 
 `gross_minor` is everything collected by simulated payments (after discounts),
 including later-refunded orders; `estimated_payout_minor = gross - refunds -
-fees`. `simulated: true` is always present; the UI must label these numbers as
+fees`. `free_registrations` counts confirmed orders whose list price was zero,
+so an order made free by a 100% promo code is not counted as one. `simulated: true` is always present; the UI must label these numbers as
 demonstration data, never as real transactions.
 
 ### Event analytics (SRS 4.15)
@@ -288,7 +292,9 @@ API status is `pending`, `expired`, `cancelled`, `confirmed` or `refunded`.
 `POST /orders/{id}/cancel` accepts the purchaser, event organizer or admin.
 A pending order cancels as before. A confirmed order cancels only when it is
 free (`total_minor` 0) and none of its tickets has been checked in;
-its tickets become `cancelled`. A confirmed paid order returns 409 and must go
+its tickets become `cancelled`. Once the event has started, the purchaser can
+no longer cancel a confirmed registration (409); the organizer or an admin still
+can. A confirmed paid order returns 409 and must go
 through the refund endpoint so a Refund row and audit entry always exist.
 
 `POST /orders/{id}/refund` is restricted to the event's organizer or an admin
@@ -307,6 +313,15 @@ A refund, or the cancellation of a confirmed free registration, emails the
 purchaser after the transaction commits: the refunded amount (marked simulated)
 and the ticket identifiers that are no longer valid. A repeated refund call and
 the cancellation of a pending hold send nothing.
+
+`GET /events/{id}/orders` (organizer or admin; others get 404) lists the event's
+orders newest first, leaving out pending reservations. Each row carries `id`,
+`purchaser_email`, `status`, `subtotal_minor`, `discount_minor`, `total_minor`,
+`confirmed_at`, `tickets`, `checked_in` and `action`: `"refund"` for a confirmed
+paid order, `"cancel"` for a confirmed order that cost nothing (including one
+made free by a 100% promo code), or `null` when the order is already closed or
+has a checked-in ticket. The web organizer page uses it for its Refund and
+Cancel registration buttons.
 
 | Method and path | Behavior |
 | --- | --- |
@@ -337,7 +352,8 @@ Create campaign:
 
 `discount_type` is `percent` (1-100) or `fixed` (minor units). An empty
 `ticket_types` means the campaign applies to every type on the event; any type
-listed must belong to that event. Creating a campaign also generates exactly one
+listed must belong to that event, and at least one listed type must be paid.
+`max_redemptions` cannot be set below the number of redemptions still counted. Creating a campaign also generates exactly one
 promo code and its campaign-link token.
 
 Codes are normalized to upper case with whitespace collapsed, so lookup and
@@ -348,7 +364,9 @@ A code is validated at checkout, inside the transaction that already locks the
 event, so redemption counting is serialized by the same lock that protects seat
 inventory. Rejections are explicit 400/409 responses, never a silent full-price
 charge: unknown or wrong-event code, disabled campaign, not yet started, expired,
-redemption limit reached, or no applicable ticket types in the order. A campaign
+redemption limit reached, or no applicable ticket types in the order. The
+limit counts redemptions on confirmed orders only: refunding or cancelling an
+order gives its use of the code back, while the campaign report still lists it. A campaign
 past its `ends_at` rejects its codes but is not auto-disabled; the campaign and
 its codes are retained for reporting and audit.
 

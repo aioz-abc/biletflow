@@ -21,6 +21,7 @@ from .models import (
     Ticket,
     TicketType,
 )
+from .services import live_redemptions, order_action
 
 
 class StrictModelSerializer(serializers.ModelSerializer):
@@ -125,6 +126,11 @@ class TicketTypeSerializer(StrictModelSerializer):
         end = attrs.get("sales_end", getattr(self.instance, "sales_end", None))
         if start and end and end <= start:
             raise serializers.ValidationError({"sales_end": "Must be after sales_start."})
+        event = getattr(self.instance, "event", None) or self.context.get("event")
+        if event and start and start >= event.starts_at:
+            raise serializers.ValidationError(
+                {"sales_start": "Sales must open before the event starts."}
+            )
         return attrs
 
 
@@ -196,6 +202,33 @@ class OrderSerializer(serializers.ModelSerializer):
             Ticket.objects.filter(order_item__order=obj).select_related("order_item__order"),
             many=True,
         ).data
+
+
+class EventOrderSerializer(serializers.ModelSerializer):
+    """One row of an organizer's order list, with the action still allowed."""
+
+    purchaser_email = serializers.EmailField(source="purchaser.email", read_only=True)
+    tickets = serializers.IntegerField(source="tickets_count", read_only=True)
+    checked_in = serializers.IntegerField(read_only=True)
+    action = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = [
+            "id",
+            "purchaser_email",
+            "status",
+            "subtotal_minor",
+            "discount_minor",
+            "total_minor",
+            "confirmed_at",
+            "tickets",
+            "checked_in",
+            "action",
+        ]
+
+    def get_action(self, obj):
+        return order_action(obj)
 
 
 class ReserveItemSerializer(StrictSerializer):
@@ -346,6 +379,17 @@ class CampaignSerializer(StrictModelSerializer):
             raise serializers.ValidationError(
                 {"ticket_types": "Ticket types must belong to this event."}
             )
+        if kinds and not any(kind.price_minor for kind in kinds):
+            raise serializers.ValidationError(
+                {"ticket_types": "A discount needs at least one paid ticket type."}
+            )
+        limit = attrs.get("max_redemptions")
+        if self.instance is not None and limit is not None:
+            used = live_redemptions(self.instance)
+            if limit < used:
+                raise serializers.ValidationError(
+                    {"max_redemptions": f"Already redeemed {used} times; limit too low."}
+                )
         return attrs
 
     def get_report(self, obj):

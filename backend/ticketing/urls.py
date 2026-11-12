@@ -11,6 +11,7 @@ urlpatterns = [
     path("events/<int:pk>/duplicate", views.DuplicateEvent.as_view()),
     path("events/<int:pk>/ticket-types", views.TicketTypeList.as_view()),
     path("events/<int:pk>/attendees", views.EventAttendees.as_view()),
+    path("events/<int:pk>/orders", views.EventOrders.as_view()),
     path("events/<int:pk>/staff", views.EventStaff.as_view()),
     path("events/<int:pk>/staff/<int:user_id>", views.EventStaffDetail.as_view()),
     path("events/<int:pk>/campaigns", views.CampaignList.as_view()),

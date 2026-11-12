@@ -2,11 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatMoney } from '../utils/money'
+import { ORDER_STATUS, attendeeCanCancel } from '../utils/orders'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
 
 const TICKET_STATUS = { valid: 'Valid', checked_in: 'Checked in', cancelled: 'Cancelled', refunded: 'Refunded' }
-const ORDER_STATUS = { pending: 'Awaiting payment', confirmed: 'Confirmed', cancelled: 'Cancelled', refunded: 'Refunded' }
 
 // /account — the attendee's tickets and orders (first page of each).
 
@@ -15,6 +15,9 @@ function Account() {
   const [orders, setOrders] = useState(null)
   const [events, setEvents] = useState({}) // event id -> title
   const [error, setError] = useState(null)
+  const [confirming, setConfirming] = useState(null) // order id awaiting the second click
+  const [orderError, setOrderError] = useState(null)
+  const [version, setVersion] = useState(0)
 
   useEffect(() => {
     let active = true
@@ -32,7 +35,19 @@ function Account() {
       })
       .catch((err) => active && setError(err.message))
     return () => { active = false }
-  }, [])
+  }, [version])
+
+  async function cancelRegistration(order) {
+    setOrderError(null)
+    try {
+      await api(`/orders/${order.id}/cancel`, { method: 'POST' })
+      setConfirming(null)
+      setVersion((v) => v + 1) // tickets change status too
+    } catch (err) {
+      setOrderError(err.message)
+      setConfirming(null)
+    }
+  }
 
   const title = (eventId) => events[eventId] ?? `Event #${eventId}`
   const pending = orders?.filter((o) => o.status === 'pending') ?? []
@@ -79,6 +94,7 @@ function Account() {
       )}
 
       <h2 className="mt-10 text-xl font-semibold">Orders</h2>
+      {orderError && <p role="alert" className="mt-2 text-red-600">{orderError}</p>}
       {orders.length === 0 ? <p className="mt-2 text-gray-600">No orders yet.</p> : (
         <ul className="mt-3 divide-y rounded-xl border bg-white text-sm">
           {orders.map((o) => (
@@ -91,6 +107,25 @@ function Account() {
                     {' · '}
                     <Link to={`/support/new?order=${o.id}`} className="text-indigo-600 underline">Get help</Link>
                   </>
+                )}
+                {attendeeCanCancel(o) && (
+                  confirming === o.id ? (
+                    <>
+                      {' · '}
+                      <button type="button" onClick={() => cancelRegistration(o)} className="text-red-700 underline">
+                        Yes, cancel and free my seat
+                      </button>
+                      {' · '}
+                      <button type="button" onClick={() => setConfirming(null)} className="underline">Keep</button>
+                    </>
+                  ) : (
+                    <>
+                      {' · '}
+                      <button type="button" onClick={() => setConfirming(o.id)} className="text-red-700 underline">
+                        Cancel registration
+                      </button>
+                    </>
+                  )
                 )}
               </span>
             </li>
