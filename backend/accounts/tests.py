@@ -92,7 +92,7 @@ class UserTests(TestCase):
     def test_custom_user_admin_add_and_edit_pages_render(self):
         admin = User.objects.create_superuser("admin@example.com", "Example-pass-2026!")
         self.client.force_login(admin)
-        self.assertEqual(self.client.get("/admin/accounts/user/add/").status_code, 200)
+        self.assertEqual(self.client.get("/django-admin/accounts/user/add/").status_code, 200)
         self.assertEqual(
-            self.client.get(f"/admin/accounts/user/{admin.pk}/change/").status_code, 200
+            self.client.get(f"/django-admin/accounts/user/{admin.pk}/change/").status_code, 200
         )

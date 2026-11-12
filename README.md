@@ -25,7 +25,7 @@ backend.
 
 - Веб-приложение: [localhost:5173](http://localhost:5173)
 - API health: [localhost:8000/api/health](http://localhost:8000/api/health), ответ `{"status":"ok","database":"ok"}`
-- Внутренняя Django admin: [localhost:8000/admin/](http://localhost:8000/admin/)
+- Внутренняя Django admin: [localhost:8000/django-admin/](http://localhost:8000/django-admin/) (`/admin` занят админкой Мирата во фронтенде)
 - Логи: `docker compose logs -f web` (письма тоже здесь) и `docker compose logs -f frontend`
 - Состояние: `docker compose ps`
 - Остановка с сохранением данных: `docker compose down`
@@ -113,6 +113,36 @@ docker compose exec -T web python manage.py seed_demo
 однократный проход. Demo-записи сохраняются в локальной БД. Оплата — только
 симуляция; реальных списаний нет. Старые документы первого этапа сохранены
 как история, актуальный контракт находится в `docs/BACKEND_MVP_API.md`.
+
+## Деплой на Heroku
+
+Production-сборка — один контейнер (`Dockerfile.heroku`, `heroku.yml`): Vite собирает
+React, Django + WhiteNoise отдают его с того же домена, что и `/api`, gunicorn
+обслуживает запросы, миграции выполняются в release-фазе. Django admin — на
+`/django-admin/`, `/admin` — админка Мирата во фронтенде.
+
+Один раз (нужен Heroku CLI и `heroku login`):
+
+```bash
+heroku create biletflow-demo --stack container --region eu
+heroku addons:create heroku-postgresql:essential-0 -a biletflow-demo
+heroku config:set -a biletflow-demo DJANGO_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(50))')"
+heroku config:set -a biletflow-demo DJANGO_ALLOWED_HOSTS=<host из heroku apps:info> FRONTEND_BASE_URL=https://<host>
+heroku ps:type web=basic -a biletflow-demo
+```
+
+Деплой и демо-данные:
+
+```bash
+git push https://git.heroku.com/biletflow-demo.git HEAD:main
+heroku run -a biletflow-demo -- python manage.py seed_demo --password "$(heroku config:get DEMO_PASSWORD -a biletflow-demo)"
+```
+
+Пароль демо-аккаунтов хранится только в config var `DEMO_PASSWORD`, не в Git.
+Остановить расходы: `heroku ps:scale web=0`; база (Essential-0) продолжает
+списывать до $5/мес, пока не удалена (`heroku pg:backups:capture` перед удалением).
+Письма — симуляция, видны в `heroku logs --tail`. Мобильному приложению нужно
+указать адрес Heroku вместо `localhost:8000`.
 
 ## Документация
 

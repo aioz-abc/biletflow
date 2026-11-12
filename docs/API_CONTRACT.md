@@ -292,7 +292,7 @@ Phase 1 proposal: Platform Admin only (current auth represents this as
 `is_superuser`, exposed as `platform_admin`). Frontend role checks only control
 navigation; backend permissions remain mandatory. Use existing `/auth/login`
 and `/auth/me` in Phase 2; do not create separate credentials or token storage.
-The Django `/admin/` interface on port 8000 is separate from the frontend route.
+The Django admin lives at `/django-admin/` and is separate from the frontend `/admin` route.
 
 Search endpoints accept `?search=...&page=1`, returning the shared envelope:
 
