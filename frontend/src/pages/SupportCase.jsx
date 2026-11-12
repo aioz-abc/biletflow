@@ -9,6 +9,7 @@ import { supportAssignees } from '../utils/staff'
 
 const dateFmt = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium', timeStyle: 'short' })
 const POLL_MS = 10000 // the API has no websockets; clients poll ?after=
+const HEADER_EVERY = 3 // also refresh status/assignment every 30 s without new messages
 
 // /support/:id — one case and its message thread (the link in support emails).
 // The requester and the support side (event owner, Event Admin with
@@ -43,13 +44,17 @@ function CaseThread({ id }) {
 
     load().catch((err) => active && setError(err.status === 404 ? 'Case not found.' : err.message))
 
+    let ticks = 0
     const timer = setInterval(() => {
       if (document.hidden || lastId.current === 0) return
+      ticks += 1
       api(`/support-cases/${id}/messages?after=${lastId.current}`)
         .then((incoming) => {
-          if (!active || incoming.length === 0) return
+          if (!active) return
           addMessages(incoming)
-          load().catch(() => {}) // a new reply may come with a status change
+          // A new reply may come with a status change; staff may also resolve
+          // or reassign a case without writing anything.
+          if (incoming.length > 0 || ticks % HEADER_EVERY === 0) load().catch(() => {})
         })
         .catch(() => {}) // try again on the next tick
     }, POLL_MS)
