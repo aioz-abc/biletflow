@@ -77,6 +77,7 @@ function Ticket() {
             {STATUS[ticket.status] ?? ticket.status}
           </span>
         </p>
+        {ticket.attendee_name && <p className="mt-1 text-gray-700">Holder: {ticket.attendee_name}</p>}
         {qrUrl ? (
           <img src={qrUrl} alt={`QR code for ticket ${ticket.id}`} className="mx-auto mt-4 h-64 w-64" />
         ) : (

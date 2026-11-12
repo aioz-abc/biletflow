@@ -66,6 +66,24 @@ def main():
         201,
     )
     call(f"/events/{event_id}/publish", {"published": True}, owner)
+    # Paid tickets stay blocked until the simulated activation is complete (SRS 4.5).
+    call(
+        "/orders",
+        {"event": event_id, "items": [{"ticket_type": kind["id"], "quantity": 1}]},
+        buyer,
+        409,
+    )
+    activation = call(
+        f"/events/{event_id}/activation",
+        {
+            "identity_confirmed": True,
+            "payout_reference": "SIM-PAYOUT-DEMO",
+            "accept_terms": True,
+            "pay_fee": "success",
+        },
+        owner,
+    )
+    assert activation["status"] == "active"
     order = call(
         "/orders",
         {"event": event_id, "items": [{"ticket_type": kind["id"], "quantity": 1}]},
@@ -84,6 +102,9 @@ def main():
     assert stats["sold"] == 1 and stats["checked_in"] == 1, stats
     sales = call(f"/events/{event_id}/sales", token=owner)
     assert sales["gross_minor"] == 250000 and sales["simulated"], sales
+    analytics = call(f"/events/{event_id}/analytics", token=owner)
+    assert analytics["totals"]["collected_minor"] == sales["gross_minor"], analytics
+    assert analytics["inventory"]["check_in_percent"] == 100, analytics
     print(
         json.dumps(
             {
@@ -94,6 +115,8 @@ def main():
                 "total_minor": 250000,
                 "fees_minor": sales["fees_minor"],
                 "estimated_payout_minor": sales["estimated_payout_minor"],
+                "paid_sales_activation": activation["status"],
+                "analytics_collected_minor": analytics["totals"]["collected_minor"],
                 "check_in": "checked_in",
                 "duplicate_check_in": "rejected",
             },

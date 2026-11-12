@@ -240,8 +240,8 @@ Public request:
 
 | Method | Endpoint | Description | Status |
 |--------|----------|--------------|--------|
-| GET | /events/:id/activation | Activation checklist status | planned |
-| POST | /events/:id/activation | Submit activation (fee + payout info, sandbox) | planned |
+| GET | /events/:id/activation | Activation checklist status | implemented |
+| POST | /events/:id/activation | Submit activation (fee + payout info, sandbox) | implemented |
 
 ## Promo Codes & Campaigns
 
@@ -315,10 +315,15 @@ non-admin caller.
 | GET | /admin/orders | Search orders | planned |
 | POST | /admin/users/:id/suspend | Suspend / restore user | implemented |
 | POST | /admin/events/:id/suspend | Suspend / restore event | implemented |
-| GET | /admin/activations | Review activation requests | planned |
+| GET | /admin/activations | Review activation requests | implemented |
+| POST | /admin/activations/:id/suspend | Suspend / restore paid sales | implemented |
 | GET | /admin/reports | Operational reports export | planned |
 
 ## Analytics
+
+**Implemented** as `GET /events/:id/analytics` following the agreed contract in
+`docs/ANALYTICS_REQUIREMENTS.md` (see `BACKEND_MVP_API.md`, "Event analytics").
+The Phase 1 proposal below is kept for history; its field names were replaced.
 
 Phase 1 proposal: event owner or Platform Admin. Query parameters are
 `from` and `to` (ISO timestamps; inclusive start, exclusive end) and optional

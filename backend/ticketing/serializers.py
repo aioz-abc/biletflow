@@ -11,6 +11,7 @@ from .models import (
     Event,
     Order,
     OrderItem,
+    PaidSalesActivation,
     PromoCode,
     PromotionalCampaign,
     Refund,
@@ -143,6 +144,8 @@ class TicketSerializer(serializers.ModelSerializer):
             "identifier",
             "event",
             "ticket_type",
+            "attendee_name",
+            "attendee_email",
             "status",
             "issued_at",
             "checked_in_at",
@@ -212,13 +215,59 @@ class ReserveSerializer(StrictSerializer):
         return items
 
 
+class AttendeeSerializer(StrictSerializer):
+    name = serializers.CharField(max_length=200)
+    email = serializers.EmailField(required=False, allow_blank=True, default="")
+
+
+class OrderAttendeeSerializer(AttendeeSerializer):
+    ticket_type = serializers.IntegerField(min_value=1)
+
+
 class CheckoutSerializer(StrictSerializer):
     outcome = serializers.ChoiceField(choices=["success", "failure"])
     promo_code = serializers.CharField(max_length=32, required=False, allow_blank=False)
+    attendees = OrderAttendeeSerializer(many=True, required=False, max_length=100)
 
 
 class PreviewSerializer(StrictSerializer):
     promo_code = serializers.CharField(max_length=32, required=False, allow_blank=False)
+
+
+class ActivationSerializer(StrictSerializer):
+    identity_confirmed = serializers.BooleanField(required=False)
+    payout_reference = serializers.CharField(max_length=64, required=False, allow_blank=False)
+    accept_terms = serializers.BooleanField(required=False)
+    pay_fee = serializers.ChoiceField(choices=["success", "failure"], required=False)
+
+    def validate_payout_reference(self, value):
+        # Simulation only (SRS 3.2): refuse anything that looks like a real card or
+        # bank account number so demo data never holds one.
+        if sum(char.isdigit() for char in value) >= 12:
+            raise serializers.ValidationError(
+                "Use a simulated reference such as SIM-PAYOUT-1, never real account data."
+            )
+        return value
+
+    def validate(self, attrs):
+        if not attrs:
+            raise serializers.ValidationError("Send at least one checklist step.")
+        return attrs
+
+
+class AdminActivationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = PaidSalesActivation
+        fields = ["id"]
+
+    def to_representation(self, activation):
+        from .services import activation_state
+
+        event = activation.event
+        return activation_state(event, activation) | {
+            "event_title": event.title,
+            "organizer_email": event.organizer.user.email,
+        }
 
 
 class PublishSerializer(StrictSerializer):

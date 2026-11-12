@@ -127,6 +127,19 @@ class Command(BaseCommand):
             for name, price, quantity in spec["types"]:
                 event.ticket_types.create(name=name, price_minor=price, quantity=quantity)
             services.record_audit(event, organizer, "event.seeded", event, "seed_demo")
+        if event.ticket_types.filter(price_minor__gt=0).exists():
+            # Paid events go through the real simulated activation (SRS 4.5);
+            # repeating it on a second seed run changes nothing.
+            services.submit_activation(
+                organizer,
+                event.pk,
+                {
+                    "identity_confirmed": True,
+                    "payout_reference": "SIM-PAYOUT-DEMO",
+                    "accept_terms": True,
+                    "pay_fee": "success",
+                },
+            )
         return event
 
     def campaign(self, event):

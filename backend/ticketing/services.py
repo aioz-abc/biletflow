@@ -1,6 +1,7 @@
 import hashlib
+from collections import defaultdict
 from datetime import timedelta
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.conf import settings
 from django.core import signing
@@ -19,6 +20,7 @@ from .models import (
     Event,
     Order,
     OrderItem,
+    PaidSalesActivation,
     Payment,
     PromoCode,
     PromoRedemption,
@@ -28,7 +30,7 @@ from .models import (
     Ticket,
     TicketType,
 )
-from .permissions import can_handle_case, support_cases, visible_events
+from .permissions import can_handle_case, managed_events, support_cases, visible_events
 
 
 class Conflict(APIException):
@@ -80,6 +82,8 @@ def reserve(user, event_id, items):
             raise Conflict("Not enough tickets remaining.")
         total += kind.price_minor * quantity
         selected.append((kind, quantity))
+    if total and not paid_sales_open(event):
+        raise Conflict("Paid sales are not activated for this event.")
     order = Order.objects.create(
         purchaser=user,
         event=event,
@@ -140,20 +144,24 @@ def preview_order(user, order_id, promo_code=None):
 
 
 @transaction.atomic
-def checkout(user, order_id, outcome, promo_code=None):
+def checkout(user, order_id, outcome, promo_code=None, attendees=None):
     initial = get_object_or_404(Order, pk=order_id, purchaser=user)
     event = Event.objects.select_for_update().get(pk=initial.event_id)
     order = Order.objects.select_for_update().get(pk=order_id)
     if order.status == "confirmed":
         return order
     ensure_checkout_available(user, event, order)
+    items = list(order.items.all())
+    # Re-checked here: paid sales may have been suspended since the reservation.
+    if any(item.unit_price_minor for item in items) and not paid_sales_open(event):
+        raise Conflict("Paid sales are not activated for this event.")
+    holders = ticket_holders(user, items, attendees or [])
     if outcome == "failure":
         record_audit(event, user, "payment.failed", order, "Simulated payment failed.")
         return order
     # Totals are always recomputed from purchase-time item prices; a client never
     # supplies a discount. The event is already locked above, so redemption counting
     # is serialized by exactly the same lock that protects seat inventory.
-    items = list(order.items.all())
     subtotal = sum(item.unit_price_minor * item.quantity for item in items)
     discount = 0
     redemption = None
@@ -181,7 +189,11 @@ def checkout(user, order_id, outcome, promo_code=None):
         )
         record_audit(event, user, "payment.completed", payment, f"{payment.amount_minor} tiyn.")
     Ticket.objects.bulk_create(
-        [Ticket(order_item=item) for item in items for _ in range(item.quantity)]
+        [
+            Ticket(order_item=item, attendee_name=holder["name"], attendee_email=holder["email"])
+            for item in items
+            for holder in holders[item.pk]
+        ]
     )
     order.status = "confirmed"
     order.confirmed_at = timezone.now()
@@ -198,6 +210,48 @@ def checkout(user, order_id, outcome, promo_code=None):
         ]
     )
     return order
+
+
+def ticket_holders(user, items, attendees):
+    """Name each ticket to be issued (SRS 4.6): {item.pk: [holder per ticket]}.
+
+    ``attendees`` are matched to their ticket type in the order given; any ticket
+    left unnamed is held by the purchaser. Validated before anything is written.
+    """
+    given = defaultdict(list)
+    for attendee in attendees:
+        given[attendee["ticket_type"]].append(attendee)
+    quantities = {item.ticket_type_id: item.quantity for item in items}
+    for kind, holders in given.items():
+        if len(holders) > quantities.get(kind, 0):
+            raise ValidationError(
+                {"attendees": f"More attendees than tickets of ticket type {kind} in this order."}
+            )
+    purchaser = {"name": user.get_full_name() or user.email, "email": user.email}
+    return {
+        item.pk: [
+            given[item.ticket_type_id][n] if n < len(given[item.ticket_type_id]) else purchaser
+            for n in range(item.quantity)
+        ]
+        for item in items
+    }
+
+
+@transaction.atomic
+def update_attendee(user, ticket_id, data):
+    """The purchaser renames a ticket's holder, e.g. passes it to a friend, before entry."""
+    ticket = get_object_or_404(
+        Ticket.objects.select_for_update(of=("self",)).select_related("order_item__order__event"),
+        pk=ticket_id,
+        order_item__order__purchaser=user,
+    )
+    if ticket.status != "valid":
+        raise Conflict("Only a valid, not yet checked-in ticket can change holder.")
+    ticket.attendee_name = data["name"]
+    ticket.attendee_email = data["email"]
+    ticket.save(update_fields=["attendee_name", "attendee_email"])
+    record_audit(ticket.order_item.order.event, user, "ticket.attendee_updated", ticket)
+    return ticket
 
 
 def qr_identifier(token):
@@ -311,28 +365,39 @@ def discountable(order, campaign, subtotal):
     )
 
 
+def split_by_weight(weights, amount):
+    """Split ``amount`` over ``{key: weight}`` in whole tiyn that add up exactly.
+
+    Each share is rounded down, then the tiyn left over go one at a time to the
+    largest remainders, ties to the lower key (line id). Zero weights get zero.
+    """
+    shares = dict.fromkeys(weights, 0)
+    base = sum(weights.values())
+    if not amount or not base:
+        return shares
+    exact = {key: amount * weight for key, weight in weights.items()}
+    for key, numerator in exact.items():
+        shares[key] = numerator // base
+    leftover = amount - sum(shares.values())
+    for key in sorted(weights, key=lambda key: (-(exact[key] % base), key))[:leftover]:
+        shares[key] += 1
+    return shares
+
+
 def allocate_discount(items, kinds, discount):
     """Split an order's discount across its lines, in whole tiyn that add up exactly.
 
     Only the lines the campaign covered share it (``kinds`` is its ticket-type ids;
     empty means every type), in proportion to their subtotals, so a VIP-only code
-    never lands on General admission. Each share is rounded down, then the tiyn
-    left over go one at a time to the largest remainders, ties to the lower line id.
+    never lands on General admission. Rounding follows ``split_by_weight``.
     Returns {item.pk: share}, with 0 for lines the campaign did not cover.
     """
-    shares = {item.pk: 0 for item in items}
-    lines = [item for item in items if not kinds or item.ticket_type_id in kinds]
-    base = sum(item.unit_price_minor * item.quantity for item in lines)
-    if not discount or not base:
-        return shares
-    exact = {item.pk: discount * item.unit_price_minor * item.quantity for item in lines}
-    for pk, numerator in exact.items():
-        shares[pk] = numerator // base
-    leftover = discount - sum(shares.values())
-    by_remainder = sorted(lines, key=lambda item: (-(exact[item.pk] % base), item.pk))
-    for item in by_remainder[:leftover]:
-        shares[item.pk] += 1
-    return shares
+    covered = {
+        item.pk: item.unit_price_minor * item.quantity
+        for item in items
+        if not kinds or item.ticket_type_id in kinds
+    }
+    return {item.pk: 0 for item in items} | split_by_weight(covered, discount)
 
 
 def price_promo(order, subtotal, code_text):
@@ -653,3 +718,116 @@ def notify_support(case, recipient, summary):
     transaction.on_commit(
         lambda: notifications.send_support_notification(case.pk, recipient, summary)
     )
+
+
+def paid_sales_open(event):
+    activation = PaidSalesActivation.objects.filter(event=event).first()
+    return activation is not None and activation.sales_open
+
+
+def activation_state(event, activation=None):
+    """Checklist an organizer works through to sell paid tickets (SRS 4.5, UC2)."""
+    if activation is None:
+        activation = PaidSalesActivation.objects.filter(event=event).first()
+    has_paid_type = event.ticket_types.filter(price_minor__gt=0).exists()
+    steps = {
+        "paid_ticket_type": has_paid_type,
+        "identity_verified": bool(activation and activation.identity_verified_at),
+        "payout_account": bool(activation and activation.payout_reference),
+        "terms_accepted": bool(activation and activation.terms_accepted_at),
+        "fee_paid": bool(activation and activation.activated_at),
+    }
+    if activation and activation.suspended_at:
+        status = "suspended"
+    elif steps["fee_paid"]:
+        status = "active"
+    elif any(value for key, value in steps.items() if key != "paid_ticket_type"):
+        status = "in_progress"
+    else:
+        status = "not_started"
+    return {
+        "id": activation.pk if activation else None,
+        "event": event.pk,
+        "status": status,
+        "sales_open": status == "active",
+        "simulated": True,
+        "currency": "KZT",
+        "fee_minor": (
+            activation.fee_minor
+            if activation and activation.activated_at
+            else settings.PAID_SALES_ACTIVATION_FEE_MINOR
+        ),
+        "checklist": [{"step": step, "done": done} for step, done in steps.items()],
+        "payout_reference": activation.payout_reference if activation else "",
+        "fee_reference": activation.fee_reference if activation else None,
+        "activated_at": activation.activated_at if activation else None,
+        "suspended_at": activation.suspended_at if activation else None,
+        "suspension_reason": activation.suspension_reason if activation else "",
+    }
+
+
+@transaction.atomic
+def submit_activation(user, event_id, data):
+    """Record the checklist steps sent and, last, the simulated activation fee.
+
+    Each step is optional so the organizer can work through the checklist; the fee
+    is only charged once every other step is complete. Paying again is a no-op.
+    """
+    event = get_object_or_404(managed_events(user).select_for_update(), pk=event_id)
+    activation, _ = PaidSalesActivation.objects.get_or_create(event=event)
+    now = timezone.now()
+    if data.get("identity_confirmed") and not activation.identity_verified_at:
+        activation.identity_verified_at = now
+        record_audit(event, user, "activation.identity_verified", activation)
+    if data.get("payout_reference") and data["payout_reference"] != activation.payout_reference:
+        activation.payout_reference = data["payout_reference"]
+        record_audit(event, user, "activation.payout_connected", activation)
+    if data.get("accept_terms") and not activation.terms_accepted_at:
+        activation.terms_accepted_at = now
+        record_audit(event, user, "activation.terms_accepted", activation)
+    outcome = data.get("pay_fee")
+    if outcome and not activation.activated_at:
+        missing = [
+            item["step"]
+            for item in activation_state(event, activation)["checklist"]
+            if not item["done"] and item["step"] != "fee_paid"
+        ]
+        if missing:
+            raise Conflict(f"Complete these steps before paying the fee: {', '.join(missing)}.")
+        if outcome == "failure":
+            record_audit(event, user, "activation.fee_failed", activation, "Simulated failure.")
+        else:
+            activation.fee_minor = settings.PAID_SALES_ACTIVATION_FEE_MINOR
+            activation.fee_reference = uuid4()
+            activation.activated_at = now
+            record_audit(
+                event,
+                user,
+                "activation.activated",
+                activation,
+                f"Simulated activation fee of {activation.fee_minor} tiyn paid.",
+            )
+    activation.save()
+    return activation_state(event, activation)
+
+
+@transaction.atomic
+def suspend_paid_sales(admin, activation_id, suspended, reason):
+    activation = get_object_or_404(
+        PaidSalesActivation.objects.select_for_update().select_related("event"), pk=activation_id
+    )
+    if suspended:
+        activation.suspended_at = activation.suspended_at or timezone.now()
+        activation.suspension_reason = reason
+    else:
+        activation.suspended_at = None
+        activation.suspension_reason = ""
+    activation.save(update_fields=["suspended_at", "suspension_reason", "updated_at"])
+    record_audit(
+        activation.event,
+        admin,
+        "activation.suspended" if suspended else "activation.unsuspended",
+        activation,
+        reason,
+    )
+    return activation_state(activation.event, activation)

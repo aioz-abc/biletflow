@@ -100,5 +100,7 @@ EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
 DEFAULT_FROM_EMAIL = "BiletFlow Demo <noreply@example.com>"
 # Simulated processing fee in basis points (300 = 3%), withheld from organizer payouts.
 PROCESSING_FEE_BPS = int(os.environ.get("PROCESSING_FEE_BPS", "300"))
+# One-time simulated Paid Sales Activation Fee per event, in tiyn (SRS 3.3): 5 000 KZT.
+PAID_SALES_ACTIVATION_FEE_MINOR = int(os.environ.get("PAID_SALES_ACTIVATION_FEE_MINOR", "500000"))
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../api/client'
 import { formatMoney } from '../utils/money'
+import { attendeesPayload, holderKeys } from '../utils/attendees'
 
 const preview = (orderId, code) =>
   api(`/orders/${orderId}/preview`, { method: 'POST', body: code ? { promo_code: code } : {} })
@@ -37,6 +38,7 @@ function Checkout() {
   const [order, setOrder] = useState(null)
   const [event, setEvent] = useState(null)
   const [names, setNames] = useState({}) // ticket type id -> name
+  const [holders, setHolders] = useState({}) // "<type>-<n>" -> name on that ticket
   const [quote, setQuote] = useState(null) // { subtotal_minor, discount_minor, total_minor }
   const [code, setCode] = useState(searchParams.get('promo_code') ?? '')
   const [applied, setApplied] = useState('') // code included in the quote
@@ -113,7 +115,11 @@ function Checkout() {
       result = await api(`/orders/${orderId}/checkout`, {
         method: 'POST',
         // The code is re-validated here: it may have expired or run out since the preview.
-        body: { outcome, ...(applied && { promo_code: applied }) },
+        body: {
+          outcome,
+          ...(applied && { promo_code: applied }),
+          attendees: attendeesPayload(order.items, holders),
+        },
       })
     } catch (err) {
       if (err.status === 0 || err.status === 409) {
@@ -188,6 +194,19 @@ function Checkout() {
             </dl>
           )}
 
+          <fieldset className="mt-6">
+            <legend className="text-sm font-medium">Name on each ticket</legend>
+            <p className="text-xs text-gray-500">Optional. Leave blank for tickets you will use yourself.</p>
+            {holderKeys(order.items).map(({ key, ticketType, n }) => (
+              <label key={key} className="mt-2 block">
+                <span className="text-sm">{names[ticketType] ?? 'Ticket'} {n + 1}</span>
+                <input value={holders[key] ?? ''} maxLength={200} autoComplete="name"
+                  onChange={(e) => setHolders((known) => ({ ...known, [key]: e.target.value }))}
+                  className="mt-1 w-full rounded border px-3 py-2" />
+              </label>
+            ))}
+          </fieldset>
+
           {message && <p role="alert" className="mt-4 text-sm text-red-600">{message}</p>}
           <div className="mt-6 flex flex-wrap gap-3">
             <button type="button" disabled={busy || !quote} onClick={() => pay('success')}
@@ -216,7 +235,7 @@ function Checkout() {
           <ul className="mt-3 divide-y rounded-xl border bg-white">
             {order.tickets.map((ticket) => (
               <li key={ticket.id} className="flex justify-between p-4">
-                <span>{names[ticket.ticket_type] ?? 'Ticket'} #{ticket.id}</span>
+                <span>{names[ticket.ticket_type] ?? 'Ticket'} #{ticket.id} · {ticket.attendee_name}</span>
                 <Link to={`/tickets/${ticket.id}`} className="text-indigo-600 underline">Show QR</Link>
               </li>
             ))}
